@@ -140,6 +140,11 @@ class MPVView(
     MPVLib.setOptionString("speed", playerPreferences.defaultSpeed.get().toString())
     MPVLib.setOptionString("vd-lavc-film-grain", "cpu")
 
+    // Apply the saved aspect ratio before mpv loads the first file. PlayerActivity
+    // reapplies it after FILE_LOADED as well, because some containers reset video
+    // properties while their tracks are initialized.
+    applySavedAspectRatioOptions()
+
     val preciseSeek = playerPreferences.usePreciseSeeking.get()
     MPVLib.setOptionString("hr-seek", if (preciseSeek) "yes" else "no")
     MPVLib.setOptionString("hr-seek-framedrop", if (preciseSeek) "no" else "yes")
@@ -149,6 +154,32 @@ class MPVView(
 
     setupSubtitlesOptions()
     setupAudioOptions()
+  }
+
+  private fun applySavedAspectRatioOptions() {
+    val customRatio = playerPreferences.defaultCustomAspectRatio.get()
+    if (customRatio > 0.0) {
+      MPVLib.setOptionString("panscan", "0")
+      MPVLib.setOptionString("video-aspect-override", customRatio.toString())
+      return
+    }
+
+    when (playerPreferences.defaultVideoAspect.get()) {
+      VideoAspect.Fit -> {
+        MPVLib.setOptionString("panscan", "0")
+        MPVLib.setOptionString("video-aspect-override", "-1")
+      }
+      VideoAspect.Crop -> {
+        MPVLib.setOptionString("video-aspect-override", "-1")
+        MPVLib.setOptionString("panscan", "1")
+      }
+      VideoAspect.Stretch -> {
+        val metrics = resources.displayMetrics
+        val screenRatio = metrics.widthPixels.toDouble() / metrics.heightPixels.toDouble()
+        MPVLib.setOptionString("panscan", "0")
+        MPVLib.setOptionString("video-aspect-override", screenRatio.toString())
+      }
+    }
   }
 
   override fun observeProperties() {

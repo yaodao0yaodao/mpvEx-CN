@@ -77,7 +77,7 @@ fun PlayerButtonChip(
         when (button) {
           PlayerButton.VIDEO_TITLE -> {
             Text(
-              text = "Video Title", // TODO: strings
+              text = "视频标题", // TODO: strings
               fontSize = 15.sp, // Increased font size
               textAlign = TextAlign.Center,
               lineHeight = 14.sp,
@@ -94,7 +94,7 @@ fun PlayerButtonChip(
                 modifier = Modifier.size(24.dp), 
               )
               Text(
-                text = "1:06 • Chapter 1", // TODO: strings
+                text = "1:06 • 第 1 章", // TODO: strings
                 fontSize = 15.sp, 
                 textAlign = TextAlign.Center,
                 lineHeight = 14.sp,

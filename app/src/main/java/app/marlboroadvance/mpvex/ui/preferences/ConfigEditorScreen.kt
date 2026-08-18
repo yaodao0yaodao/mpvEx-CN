@@ -163,7 +163,7 @@ data class ConfigEditorScreen(
             )
             if (hasUnsavedChanges) {
               Text(
-                text  = "Unsaved changes",
+                text  = "有未保存的更改",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.secondary,
               )
@@ -174,7 +174,7 @@ data class ConfigEditorScreen(
           IconButton(onClick = backStack::removeLastOrNull) {
             Icon(
               Icons.AutoMirrored.Default.ArrowBack,
-              contentDescription = "Back",
+              contentDescription = "返回",
               tint = MaterialTheme.colorScheme.secondary,
             )
           }
@@ -194,7 +194,7 @@ data class ConfigEditorScreen(
             ),
             shape = RoundedCornerShape(8.dp),
           ) {
-            Icon(Icons.Default.Check, contentDescription = "Save")
+            Icon(Icons.Default.Check, contentDescription = "保存")
           }
         },
       )

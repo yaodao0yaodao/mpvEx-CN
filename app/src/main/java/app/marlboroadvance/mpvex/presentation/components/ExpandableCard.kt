@@ -104,8 +104,8 @@ private fun PreviewExpandableCard() {
 
   ExpandableCard(
     isExpanded,
-    title = { Text("Hello World") },
-    content = { Text("SPOjao;sjd") },
+    title = { Text("你好，世界") },
+    content = { Text("示例内容") },
     onExpand = { isExpanded = it },
   )
 }

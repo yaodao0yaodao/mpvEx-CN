@@ -1,5 +1,5 @@
 <resources>
-  <string name="app_name" translatable="false">mpvEx</string>
+  <string name="app_name" translatable="false">mpvEx 中文版</string>
   <string name="generic_reset">Reset</string>
   <string name="generic_share">Share</string>
   <string name="generic_confirm">Confirm</string>
@@ -269,8 +269,8 @@
   <string name="player_sheets_track_title_w_lang" translatable="false">#%d: %s (%s)</string>
   <string name="player_sheets_track_title_wo_lang" translatable="false">#%d: %s</string>
   <string name="player_sheets_track_lang_wo_title" translatable="false">#%d: %s</string>
-  <string name="player_sheets_chapter_title_substitute_subtitle" translatable="false">Subtitle #%d</string>
-  <string name="player_sheets_chapter_title_substitute_audio" translatable="false">Audio #%d</string>
+  <string name="player_sheets_chapter_title_substitute_subtitle" translatable="false">字幕 #%d</string>
+  <string name="player_sheets_chapter_title_substitute_audio" translatable="false">音轨 #%d</string>
   <string name="player_sheets_subtitles_settings_title">Subtitles settings</string>
   <string name="player_sheets_subtitles_color_text">Text</string>
   <string name="player_sheets_subtitles_color_border">Border</string>
@@ -355,14 +355,14 @@
   <string name="timer_remaining">%s remaining</string>
   <string name="toast_sleep_timer_ended">Sleep timer ended</string>
   <string name="volume_slider_absolute_value" translatable="false">%d</string>
-  <string name="github_repo_url" translatable="false">https://github.com/marlboro-advance/mpvex</string>
+  <string name="github_repo_url" translatable="false">https://github.com/yaodao0yaodao/mpvEx</string>
   <string name="swap_the_volume_and_brightness_slider">Swap volume and brightness slider</string>
   <string name="pref_player_display_reduce_player_animation">Reduce player animation</string>
   <string name="pref_player_display_hide_player_control_time">Hide player control time</string>
   <string name="show_splash_ovals_on_double_tap_to_seek">Show ripple when double tap seeking</string>
   <string name="show_time_on_double_tap_to_seek">Show seek time</string>
   <string name="player_sheets_frame_navigation_title">Frame Navigation</string>
-  <string name="player_sheets_frame_navigation_snapshot_saved" translatable="false">Saved to Pictures/mpvSnaps</string>
+  <string name="player_sheets_frame_navigation_snapshot_saved" translatable="false">已保存到 Pictures/mpvSnaps</string>
   <string name="player_sheets_frame_navigation_include_subtitles">Include subtitles in snapshot</string>
   <string name="player_sheets_zoom_slider_label">Video Zoom</string>
   <plurals name="seconds">

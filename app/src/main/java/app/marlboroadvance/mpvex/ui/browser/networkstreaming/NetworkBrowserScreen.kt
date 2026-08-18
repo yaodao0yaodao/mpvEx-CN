@@ -181,7 +181,7 @@ private fun NetworkBrowserContent(
       ) {
         EmptyState(
           icon = Icons.Filled.Folder,
-          title = "Error loading files",
+          title = "加载文件失败",
           message = error,
         )
       }
@@ -194,7 +194,7 @@ private fun NetworkBrowserContent(
       ) {
         EmptyState(
           icon = Icons.Filled.Folder,
-          title = "Empty folder",
+          title = "空文件夹",
           message = "This folder contains no files or directories",
         )
       }
@@ -255,7 +255,7 @@ private fun NetworkBrowserContent(
             if (folders.isNotEmpty()) {
               item {
                 Text(
-                  text = "Folders",
+                  text = "文件夹",
                   style = MaterialTheme.typography.titleMedium,
                   color = MaterialTheme.colorScheme.primary,
                   modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp),
@@ -277,7 +277,7 @@ private fun NetworkBrowserContent(
             if (videos.isNotEmpty()) {
               item {
                 Text(
-                  text = "Videos",
+                  text = "视频",
                   style = MaterialTheme.typography.titleMedium,
                   color = MaterialTheme.colorScheme.primary,
                   modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp),

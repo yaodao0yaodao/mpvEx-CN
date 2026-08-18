@@ -301,7 +301,7 @@ data class VideoListScreen(
         if (sortedVideosWithInfo.isNotEmpty()) {
           TooltipBox(
             positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
-            tooltip = { PlainTooltip { Text("Play recently played or first video") } },
+            tooltip = { PlainTooltip { Text("播放最近播放或第一个视频") } },
             state = rememberTooltipState(),
           ) {
             FloatingActionButton(
@@ -328,7 +328,7 @@ data class VideoListScreen(
                 }
               },
             ) {
-              Icon(Icons.Filled.PlayArrow, contentDescription = "Play recently played or first video")
+              Icon(Icons.Filled.PlayArrow, contentDescription = "播放最近播放或第一个视频")
             }
           }
         }
@@ -506,7 +506,7 @@ data class VideoListScreen(
           onDismissRequest = { showPrivateSpaceCompletionDialog.value = false },
           title = {
             Text(
-              text = "Moved to Private Space",
+              text = "已移至私密空间",
               style = MaterialTheme.typography.headlineSmall,
             )
           },
@@ -522,7 +522,7 @@ data class VideoListScreen(
             androidx.compose.material3.Button(
               onClick = { showPrivateSpaceCompletionDialog.value = false },
             ) {
-              Text("Close")
+              Text("关闭")
             }
           },
         )
@@ -613,7 +613,7 @@ private fun VideoListContent(
       ) {
         EmptyState(
           icon = Icons.Filled.VideoLibrary,
-          title = "No videos in this folder",
+          title = "此文件夹中没有视频",
           message = "Videos you add to this folder will appear here",
         )
       }
@@ -884,7 +884,7 @@ private fun VideoSortDialog(
   SortDialog(
     isOpen = isOpen,
     onDismiss = onDismiss,
-    title = "Sort & View Options",
+    title = "排序与视图选项",
     sortType = sortType.displayName,
     onSortTypeChange = { typeName ->
       VideoSortType.entries.find { it.displayName == typeName }?.let(onSortTypeChange)
@@ -910,16 +910,16 @@ private fun VideoSortDialog(
     getLabelForType = { type, _ ->
       when (type) {
         VideoSortType.Title.displayName -> Pair("A-Z", "Z-A")
-        VideoSortType.Duration.displayName -> Pair("Shortest", "Longest")
-        VideoSortType.Date.displayName -> Pair("Oldest", "Newest")
-        VideoSortType.Size.displayName -> Pair("Smallest", "Biggest")
-        else -> Pair("Asc", "Desc")
+        VideoSortType.Duration.displayName -> Pair("最短", "最长")
+        VideoSortType.Date.displayName -> Pair("最旧", "最新")
+        VideoSortType.Size.displayName -> Pair("最小", "最大")
+        else -> Pair("升序", "降序")
       }
     },
     viewModeSelector = ViewModeSelector(
-      label = "View Mode",
-      firstOptionLabel = "Folder",
-      secondOptionLabel = "Tree",
+      label = "查看模式",
+      firstOptionLabel = "文件夹",
+      secondOptionLabel = "树形",
       firstOptionIcon = Icons.Filled.ViewModule,
       secondOptionIcon = Icons.Filled.AccountTree,
       isFirstOptionSelected = folderViewMode == FolderViewMode.AlbumView,
@@ -930,9 +930,9 @@ private fun VideoSortDialog(
       },
     ),
     layoutModeSelector = ViewModeSelector(
-      label = "Layout",
-      firstOptionLabel = "List",
-      secondOptionLabel = "Grid",
+      label = "布局",
+      firstOptionLabel = "列表",
+      secondOptionLabel = "网格",
       firstOptionIcon = Icons.AutoMirrored.Filled.ViewList,
       secondOptionIcon = Icons.Filled.GridView,
       isFirstOptionSelected = mediaLayoutMode == MediaLayoutMode.LIST,
@@ -945,37 +945,37 @@ private fun VideoSortDialog(
     visibilityToggles =
       listOf(
         VisibilityToggle(
-          label = "Thumbnails",
+          label = "缩略图",
           checked = showThumbnails,
           onCheckedChange = { browserPreferences.showVideoThumbnails.set(it) },
         ),
         VisibilityToggle(
-          label = "Subtitle Indicator",
+          label = "字幕指示器",
           checked = showSubtitleIndicator,
           onCheckedChange = { browserPreferences.showSubtitleIndicator.set(it) },
         ),
         VisibilityToggle(
-          label = "Full Name",
+          label = "完整名称",
           checked = unlimitedNameLines,
           onCheckedChange = { appearancePreferences.unlimitedNameLines.set(it) },
         ),
         VisibilityToggle(
-          label = "Size",
+          label = "大小",
           checked = showSizeChip,
           onCheckedChange = { browserPreferences.showSizeChip.set(it) },
         ),
         VisibilityToggle(
-          label = "Resolution",
+          label = "分辨率",
           checked = showResolutionChip,
           onCheckedChange = { browserPreferences.showResolutionChip.set(it) },
         ),
         VisibilityToggle(
-          label = "Framerate",
+          label = "帧率",
           checked = showFramerateInResolution,
           onCheckedChange = { browserPreferences.showFramerateInResolution.set(it) },
         ),
         VisibilityToggle(
-          label = "Date",
+          label = "日期",
           checked = showDateChip,
           onCheckedChange = { browserPreferences.showDateChip.set(it) },
         ),
