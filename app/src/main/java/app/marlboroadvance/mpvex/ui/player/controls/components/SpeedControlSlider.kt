@@ -171,7 +171,7 @@ fun SpeedControlSlider(
             modifier = Modifier.size(16.dp),
           )
           Text(
-            text = "${currentSpeed.format()}x Speed Playing",
+            text = "正在以 ${currentSpeed.format()} 倍速播放",
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
             style = MaterialTheme.typography.bodyLarge,

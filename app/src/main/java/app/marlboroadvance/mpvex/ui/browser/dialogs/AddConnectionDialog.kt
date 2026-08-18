@@ -83,7 +83,7 @@ fun AddConnectionSheet(
     modifier = Modifier.widthIn(min = 400.dp, max = 600.dp),
     title = {
       Text(
-        text = "Add Network Connection",
+        text = "添加网络连接",
         style = MaterialTheme.typography.headlineSmall,
         fontWeight = FontWeight.Medium,
       )
@@ -105,7 +105,7 @@ fun AddConnectionSheet(
               OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Name", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                label = { Text("名称", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 modifier = Modifier.weight(0.50f),
                 singleLine = true,
               )
@@ -120,7 +120,7 @@ fun AddConnectionSheet(
                   value = protocol.displayName,
                   onValueChange = { },
                   readOnly = true,
-                  label = { Text("Protocol", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                  label = { Text("协议", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                   trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = protocolMenuExpanded) },
                   modifier = Modifier
                     .fillMaxWidth()
@@ -148,7 +148,7 @@ fun AddConnectionSheet(
       OutlinedTextField(
         value = host,
         onValueChange = { host = it },
-        label = { Text("Host/IP Address", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        label = { Text("主机/IP地址", maxLines = 1, overflow = TextOverflow.Ellipsis) },
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
         placeholder = { Text("192.168.1.100", maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -163,7 +163,7 @@ fun AddConnectionSheet(
               OutlinedTextField(
                 value = port,
                 onValueChange = { port = it },
-                label = { Text("Port", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                label = { Text("端口", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 modifier = Modifier.weight(0.3f),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -173,7 +173,7 @@ fun AddConnectionSheet(
               OutlinedTextField(
                 value = path,
                 onValueChange = { path = it },
-                label = { Text("Path", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                label = { Text("路径", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 modifier = Modifier.weight(0.7f),
                 singleLine = true,
                 placeholder = { Text("/", maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -190,7 +190,7 @@ fun AddConnectionSheet(
           onCheckedChange = { isAnonymous = it },
         )
         Spacer(modifier = Modifier.width(8.dp))
-        Text("Anonymous/Guest Access")
+        Text("匿名/访客访问")
       }
       
       // HTTPS checkbox (only for WebDAV)
@@ -212,7 +212,7 @@ fun AddConnectionSheet(
             },
           )
           Spacer(modifier = Modifier.width(8.dp))
-          Text("Use HTTPS (Secure Connection)")
+          Text("使用 HTTPS（安全连接）")
         }
       }
 
@@ -225,7 +225,7 @@ fun AddConnectionSheet(
               OutlinedTextField(
                 value = username,
                 onValueChange = { username = it },
-                label = { Text("Username", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                label = { Text("用户名", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 modifier = Modifier.weight(0.50f),
                 singleLine = true,
                 enabled = !isAnonymous,
@@ -235,7 +235,7 @@ fun AddConnectionSheet(
               OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
-                label = { Text("Password", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                label = { Text("密码", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 modifier = Modifier.weight(0.50f),
                 singleLine = true,
                 enabled = !isAnonymous,
@@ -250,7 +250,7 @@ fun AddConnectionSheet(
         enabled = host.isNotBlank() && (isAnonymous || username.isNotBlank()),
       ) {
         Text(
-          text = "Save",
+          text = "保存",
           fontWeight = FontWeight.SemiBold,
         )
       }
@@ -258,7 +258,7 @@ fun AddConnectionSheet(
     dismissButton = {
       TextButton(onClick = handleDismiss) {
         Text(
-          text = "Cancel",
+          text = "取消",
           fontWeight = FontWeight.Medium,
         )
       }

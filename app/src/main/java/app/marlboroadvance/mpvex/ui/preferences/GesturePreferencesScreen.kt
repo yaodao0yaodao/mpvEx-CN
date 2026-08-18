@@ -113,7 +113,7 @@ object GesturePreferencesScreen : Screen {
             values = predefinedValues + listOf(-1),
             valueToText = { value ->
               if (value == -1) {
-                AnnotatedString("Custom")
+                AnnotatedString("自定义")
               } else {
                 AnnotatedString("${value}s")
               }
@@ -122,7 +122,7 @@ object GesturePreferencesScreen : Screen {
             summary = {
               Text(
                 text = if (isCustomValue) {
-                  "Custom (${doubleTapSeekDuration}s)"
+                  "自定义 (${doubleTapSeekDuration}s)"
                 } else {
                   "${doubleTapSeekDuration}s"
                 },
@@ -140,13 +140,13 @@ object GesturePreferencesScreen : Screen {
               text = {
                 Column {
                   Text(
-                    text = "Enter custom seek duration in seconds (1-120)",
+                    text = "输入自定义跳转时长（秒，1-120）",
                     modifier = Modifier.padding(bottom = 8.dp),
                   )
                   OutlinedTextField(
                     value = customSeekValue,
                     onValueChange = { customSeekValue = it },
-                    label = { Text("Seconds") },
+                    label = { Text("秒") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
@@ -182,10 +182,10 @@ object GesturePreferencesScreen : Screen {
             onValueChange = { preferences.doubleTapSeekAreaWidth.set(it) },
             values = seekAreaValues,
             valueToText = { AnnotatedString("${it}%") },
-            title = { Text(text = "Double Tap Seek Area Width") },
+            title = { Text(text = "双击跳转区域宽度") },
             summary = {
               Text(
-                text = "Current: ${doubleTapSeekAreaWidth}%",
+                text = "当前：${doubleTapSeekAreaWidth}%",
                 color = MaterialTheme.colorScheme.outline,
               )
             },

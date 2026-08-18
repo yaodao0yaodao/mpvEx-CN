@@ -336,7 +336,7 @@ fun PlaylistSheet(
           ) {
             if (currentItem != null) {
               Text(
-                text = "Now Playing",
+                text = "正在播放",
                 style = MaterialTheme.typography.titleSmall.copy(
                   fontWeight = FontWeight.Bold,
                   color = accentColor,
@@ -349,7 +349,7 @@ fun PlaylistSheet(
               )
             }
             Text(
-              text = "$totalCount items",
+              text = "共 $totalCount 项",
               style = MaterialTheme.typography.bodyMedium,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -491,7 +491,7 @@ fun PlaylistTrackListItem(
         thumbnail?.let { bmp ->
           Image(
             bitmap = bmp.asImageBitmap(),
-            contentDescription = "Thumbnail",
+            contentDescription = "缩略图",
             modifier = Modifier.matchParentSize(),
             contentScale = ContentScale.Crop,
           )
@@ -600,7 +600,7 @@ fun PlaylistTrackListItem(
             shape = RoundedCornerShape(16.dp),
           ) {
             Text(
-              text = "Playing",
+              text = "正在播放",
               modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
               style = MaterialTheme.typography.labelSmall.copy(
                 fontWeight = FontWeight.SemiBold,
@@ -681,7 +681,7 @@ fun PlaylistTrackGridItem(
         thumbnail?.let { bmp ->
           Image(
             bitmap = bmp.asImageBitmap(),
-            contentDescription = "Thumbnail",
+            contentDescription = "缩略图",
             modifier = Modifier.matchParentSize(),
             contentScale = ContentScale.Crop,
           )
@@ -817,7 +817,7 @@ fun PlaylistTrackGridItem(
               shape = RoundedCornerShape(4.dp),
             ) {
               Text(
-                text = "Playing",
+                text = "正在播放",
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                 style = MaterialTheme.typography.labelSmall.copy(
                   fontSize = 10.sp,

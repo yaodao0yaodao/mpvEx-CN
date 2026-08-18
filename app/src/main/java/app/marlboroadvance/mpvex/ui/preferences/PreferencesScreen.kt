@@ -113,7 +113,7 @@ object PreferencesScreen : Screen {
           
           // UI & Appearance Section
           item {
-            PreferenceSectionHeader(title = "UI & Appearance")
+            PreferenceSectionHeader(title = "界面与外观")
           }
           
           item {
@@ -161,7 +161,7 @@ object PreferencesScreen : Screen {
           
           // Playback & Controls Section
           item {
-            PreferenceSectionHeader(title = "Playback & Controls")
+            PreferenceSectionHeader(title = "播放与控制")
           }
           
           item {
@@ -210,7 +210,7 @@ object PreferencesScreen : Screen {
           
           // File Management Section
           item {
-            PreferenceSectionHeader(title = "File Management")
+            PreferenceSectionHeader(title = "文件管理")
           }
           
           item {
@@ -238,7 +238,7 @@ object PreferencesScreen : Screen {
           
           // Media Settings Section
           item {
-            PreferenceSectionHeader(title = "Media Settings")
+            PreferenceSectionHeader(title = "媒体设置")
           }
           
           item {
@@ -308,7 +308,7 @@ object PreferencesScreen : Screen {
           
           // Advanced & About Section
           item {
-            PreferenceSectionHeader(title = "Advanced & About")
+            PreferenceSectionHeader(title = "高级与关于")
           }
           
           item {

@@ -14,7 +14,9 @@ android {
   compileSdk = 36
 
   defaultConfig {
-    applicationId = "app.marlboroadvance.mpvex"
+    // Keep the Kotlin namespace aligned with upstream to minimize merge conflicts,
+    // while using a distinct application ID so this fork can be installed alongside it.
+    applicationId = "io.github.yaodao0yaodao.mpvex"
     minSdk = 26
     targetSdk = 36
     versionCode = 129
@@ -50,9 +52,6 @@ android {
       buildConfigField("boolean", "ENABLE_UPDATE_FEATURE", "false")
       buildConfigField("boolean", "SCOPED_STORAGE_ONLY", "false")
 
-      ndk {
-        abiFilters += "arm64-v8a"
-      }
     }
   }
 
@@ -65,8 +64,8 @@ android {
     abi {
       isEnable = true
       reset()
-      include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
-      isUniversalApk = true
+      include("arm64-v8a")
+      isUniversalApk = false
     }
   }
 
