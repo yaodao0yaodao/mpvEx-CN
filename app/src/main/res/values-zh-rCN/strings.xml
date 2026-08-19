@@ -406,6 +406,7 @@
   <string name="got_it">知道了</string>
   <string name="general">常规</string>
   <string name="not_set_video_default">未设置（使用视频默认值）</string>
+  <string name="pref_subtitle_default_title_preferences">未设置（默认优先选择特效中文字幕）</string>
   <string name="enter_language_codes">输入用逗号分隔的语言代码（例如 zho,eng,jpn）</string>
   <string name="language_codes_placeholder">zho,eng,jpn</string>
   <string name="enter_subtitle_title_preferences">按优先级输入字幕轨标题关键词或语言代码，用逗号分隔；越靠前优先级越高，并列时继续匹配后续关键词。</string>

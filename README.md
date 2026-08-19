@@ -1,10 +1,10 @@
 ![banner](fastlane/metadata/android/en-US/images/featureGraphic.png)
 
-# mpvEx 中文版（mpvExtended 简体中文维护版）
-[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/yaodao0yaodao/mpvEx.svg?logo=github&label=GitHub&cacheSeconds=3600)](https://github.com/yaodao0yaodao/mpvEx/releases/latest)
-[![GitHub all releases](https://img.shields.io/github/downloads/yaodao0yaodao/mpvEx/total?logo=github&cacheSeconds=3600)](https://github.com/yaodao0yaodao/mpvEx/releases/latest)
+# mpvEx-CN（mpvExtended 简体中文维护版）
+[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/yaodao0yaodao/mpvEx-CN.svg?logo=github&label=GitHub&cacheSeconds=3600)](https://github.com/yaodao0yaodao/mpvEx-CN/releases/latest)
+[![GitHub all releases](https://img.shields.io/github/downloads/yaodao0yaodao/mpvEx-CN/total?logo=github&cacheSeconds=3600)](https://github.com/yaodao0yaodao/mpvEx-CN/releases/latest)
 
-这是 [marlboro-advance/mpvEx](https://github.com/marlboro-advance/mpvEx) 的简体中文维护分支，播放器内的软件名称仍为 **mpvEx**。本项目以准确的视频播放术语补全中文界面，并在保留上游功能的基础上维护少量适合中文用户的改动。
+这是 [marlboro-advance/mpvEx](https://github.com/marlboro-advance/mpvEx) 的简体中文维护分支，播放器内的软件名称仍为 **mpvEx**。这是面向 Android 的 mpv/libmpv 开源视频播放器，提供完整简体中文界面、ARM64 APK、Anime4K 放大、字幕轨标题智能匹配等增强。
 
 - **汉化日期：** 2026-08-19
 - **汉化时版本：** v1.2.9
@@ -18,7 +18,7 @@
 
 mpvExtended 是基于 libmpv 的 Android 视频播放器，源自 [mpv-android](https://github.com/mpv-android/mpv-android)。它把 mpv 强大的格式兼容性、渲染与脚本能力，整合到适合触屏操作的 Material 3 界面中，支持硬件/软件解码、字幕与外部音轨、画中画、后台播放、网络串流、SMB/FTP/WebDAV、播放列表、逐帧导航和画面缩放等功能。
 
-本仓库重点维护完整的简体中文界面。若发现漏译、术语错误或上游同步造成的界面回退，请在本项目的 [Issues](https://github.com/yaodao0yaodao/mpvEx/issues) 中反馈，并附上界面路径和截图。
+本仓库重点维护完整的简体中文界面。若发现漏译、术语错误或上游同步造成的界面回退，请在本项目的 [Issues](https://github.com/yaodao0yaodao/mpvEx-CN/issues) 中反馈，并附上界面路径和截图。
 
 ## 中文版增强
 
@@ -59,29 +59,24 @@ the [upstream Issues](https://github.com/marlboro-advance/mpvEx/issues) section.
 ## Installation
 
 ### Stable Release
-从本项目的 [GitHub Releases](https://github.com/yaodao0yaodao/mpvEx/releases) 下载最新的已签名 ARM64 APK。
+从本项目的 [GitHub Releases](https://github.com/yaodao0yaodao/mpvEx-CN/releases) 下载最新的已签名 ARM64 APK。
 
-[![Download Release](https://img.shields.io/badge/Download-ARM64%20APK-blue?style=for-the-badge)](https://github.com/yaodao0yaodao/mpvEx/releases/latest)
+[![Download Release](https://img.shields.io/badge/Download-ARM64%20APK-blue?style=for-the-badge)](https://github.com/yaodao0yaodao/mpvEx-CN/releases/latest)
 
 > 本项目使用独立包名和签名，不能覆盖安装上游版本；两者可以共存。
 
 ---
 
-## Showcase
+## 界面预览
 <div class="image-row" align="center">
-  <img src="/fastlane/metadata/android/en-US/images/phoneScreenshots/player.png" width="98%" />
+  <img src="docs/images/player-landscape.jpg" alt="mpvEx 横屏播放界面" width="98%" />
 </div>
 
 <div class="image-row" align="center" justify-content="space-between">
-  <img src="/fastlane/metadata/android/en-US/images/phoneScreenshots/folderscreen.png" width="23.5%"/>
-  <img src="/fastlane/metadata/android/en-US/images/phoneScreenshots/videoscreen.png" width="23.5%"/>
-  <img src="/fastlane/metadata/android/en-US/images/phoneScreenshots/about.png" width="23.5%"/>
-  <img src="/fastlane/metadata/android/en-US/images/phoneScreenshots/pip.png" width="23.5%"/>
-</div>
-
-<div class="image-row" align="center">
-  <img src="/fastlane/metadata/android/en-US/images/phoneScreenshots/framenavigation.png" width="48.5%" />
-  <img src="/fastlane/metadata/android/en-US/images/phoneScreenshots/chapters.png" width="48.5%" />
+  <img src="docs/images/library.jpg" alt="mpvEx 中文媒体库" width="23.5%" />
+  <img src="docs/images/decoder-settings.jpg" alt="mpvEx 中文解码器设置" width="23.5%" />
+  <img src="docs/images/mpv-profiles.jpg" alt="mpvEx MPV 配置档" width="23.5%" />
+  <img src="docs/images/about-update.jpg" alt="mpvEx 关于与更新界面" width="23.5%" />
 </div>
 
 ---

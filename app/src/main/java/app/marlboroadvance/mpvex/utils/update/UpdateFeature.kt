@@ -86,7 +86,7 @@ class UpdateManager(
             return null
         }
         
-        val release = getLatestRelease("https://api.github.com/repos/yaodao0yaodao/mpvEx/releases/latest")
+        val release = getLatestRelease("https://api.github.com/repos/yaodao0yaodao/mpvEx-CN/releases/latest")
         val currentVersion = BuildConfig.VERSION_NAME.replace("-dev", "")
         val remoteVersion = release.tagName.removePrefix("v")
         val prefs = context.getSharedPreferences("mpvEx_prefs", Context.MODE_PRIVATE)

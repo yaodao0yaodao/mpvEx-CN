@@ -236,7 +236,7 @@ fun PermissionDeniedState(
   // Explanation Dialog
   if (showExplanationDialog) {
     val uriHandler = LocalUriHandler.current
-    val githubUrl = "https://github.com/yaodao0yaodao/mpvEx"
+    val githubUrl = "https://github.com/yaodao0yaodao/mpvEx-CN"
 
     AlertDialog(
       onDismissRequest = { showExplanationDialog = false },
