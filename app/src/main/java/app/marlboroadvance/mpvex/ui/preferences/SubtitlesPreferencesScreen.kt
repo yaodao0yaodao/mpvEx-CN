@@ -198,7 +198,7 @@ object SubtitlesPreferencesScreen : Screen {
                     )
                   } else {
                     Text(
-                      stringResource(R.string.not_set_video_default),
+                      stringResource(R.string.pref_subtitle_default_title_preferences),
                       color = MaterialTheme.colorScheme.outline,
                     )
                   }

@@ -284,7 +284,7 @@ object DecoderPreferencesScreen : Screen {
                       modifier = Modifier.clickable {
                         val intent = Intent(
                           Intent.ACTION_VIEW,
-                          Uri.parse("https://github.com/yaodao0yaodao/mpvEx/blob/master/docs/Anime4K.zh-CN.md"),
+                          Uri.parse("https://github.com/yaodao0yaodao/mpvEx-CN/blob/master/docs/Anime4K.zh-CN.md"),
                         )
                         context.startActivity(intent)
                       }

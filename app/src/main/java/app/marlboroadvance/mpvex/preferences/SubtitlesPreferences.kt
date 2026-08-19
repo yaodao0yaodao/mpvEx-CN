@@ -17,7 +17,7 @@ class SubtitlesPreferences(
 ) {
   val preferredLanguages = preferenceStore.getString(
     "sub_preferred_languages",
-    "特效,Simplified,chs,CN,简,ch,zh,中",
+    DEFAULT_PREFERRED_LANGUAGES,
   )
   val autoloadMatchingSubtitles = preferenceStore.getBoolean("sub_autoload_enabled", true)
 
@@ -55,6 +55,10 @@ class SubtitlesPreferences(
   val wyzieFormats = preferenceStore.getStringSet("wyzie_formats", setOf("srt", "ass"))
   val wyzieEncodings = preferenceStore.getStringSet("wyzie_encodings", setOf("utf-8"))
   val wyzieHearingImpaired = preferenceStore.getBoolean("wyzie_hi", false)
+
+  companion object {
+    const val DEFAULT_PREFERRED_LANGUAGES = "特效,Simplified,chs,CN,简,ch,zh,中"
+  }
 }
 
 enum class SubtitleJustification(

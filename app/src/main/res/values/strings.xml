@@ -397,7 +397,7 @@
   <string name="timer_remaining">%s remaining</string>
   <string name="toast_sleep_timer_ended">Sleep timer ended</string>
   <string name="volume_slider_absolute_value" translatable="false">%d</string>
-  <string name="github_repo_url" translatable="false">https://github.com/yaodao0yaodao/mpvEx</string>
+  <string name="github_repo_url" translatable="false">https://github.com/yaodao0yaodao/mpvEx-CN</string>
   <string name="swap_the_volume_and_brightness_slider">Swap volume and brightness slider</string>
   <string name="pref_player_display_reduce_player_animation">Reduce player animation</string>
   <string name="pref_player_display_hide_player_control_time">Hide player control time</string>
@@ -426,6 +426,7 @@
   <string name="got_it">Got it</string>
   <string name="general">General</string>
   <string name="not_set_video_default">Not set (will use video default)</string>
+  <string name="pref_subtitle_default_title_preferences">Not set (effects Simplified Chinese subtitles preferred by default)</string>
   <string name="enter_language_codes">Enter language codes separated by commas (e.g., eng,jpn,spa)</string>
   <string name="language_codes_placeholder">eng,jpn,spa</string>
   <string name="enter_subtitle_title_preferences">Enter subtitle-title keywords or language codes in priority order, separated by commas. Earlier matches take precedence.</string>

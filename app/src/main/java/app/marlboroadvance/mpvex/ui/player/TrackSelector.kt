@@ -232,6 +232,7 @@ class TrackSelector(
       Log.d(TAG, "Smart Tracks: Context defined by Internal Auto-Detection -> $isAnimeContext")
 
       var preferredLangs = subtitlesPreferences.preferredLanguages.get()
+        .ifBlank { SubtitlesPreferences.DEFAULT_PREFERRED_LANGUAGES }
         .split(",")
         .map { it.trim().lowercase() }
         .filter { it.isNotEmpty() }
