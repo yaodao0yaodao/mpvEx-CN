@@ -89,11 +89,18 @@ object AboutScreen : Screen {
     }
     val updateState by (updateViewModel?.updateState ?: MutableStateFlow(UpdateViewModel.UpdateState.Idle)).collectAsState()
 
-    // Show toast when no update is available after manual check (only if update feature is enabled)
+    // Show localized feedback after a manual update check.
     LaunchedEffect(updateState) {
-        if (BuildConfig.ENABLE_UPDATE_FEATURE && updateViewModel != null && updateState is UpdateViewModel.UpdateState.NoUpdate) {
-            Toast.makeText(context, "Already using latest version", Toast.LENGTH_SHORT).show()
+        if (BuildConfig.ENABLE_UPDATE_FEATURE && updateViewModel != null) {
+          val messageRes = when (updateState) {
+            is UpdateViewModel.UpdateState.NoUpdate -> R.string.update_already_latest
+            is UpdateViewModel.UpdateState.Error -> R.string.update_check_failed
+            else -> null
+          }
+          if (messageRes != null) {
+            Toast.makeText(context, context.getString(messageRes), Toast.LENGTH_SHORT).show()
             updateViewModel.dismissNoUpdate()
+          }
         }
     }
 

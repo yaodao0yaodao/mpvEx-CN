@@ -295,7 +295,15 @@ object PlayerPreferencesScreen : Screen {
                 summary = {
                   val sensitivityPercent = (horizontalSwipeSensitivity * 1000).toInt()
                   Text(
-                    "Current: ${sensitivityPercent}/100 (${if (sensitivityPercent < 30) "Low" else if (sensitivityPercent < 55) "Medium" else "High"})",
+                    stringResource(
+                      R.string.pref_player_gestures_horizontal_swipe_sensitivity_value,
+                      sensitivityPercent,
+                      stringResource(
+                        if (sensitivityPercent < 30) R.string.sensitivity_low
+                        else if (sensitivityPercent < 55) R.string.sensitivity_medium
+                        else R.string.sensitivity_high,
+                      ),
+                    ),
                     color = MaterialTheme.colorScheme.outline,
                   )
                 },

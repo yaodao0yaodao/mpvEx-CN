@@ -196,7 +196,7 @@ object PlayerControlsPreferencesScreen : Screen {
               SeekbarStyle.entries.forEachIndexed { index, style ->
                 ListItem(
                   headlineContent = {
-                    Text(text = style.name)
+                    Text(text = stringResource(style.titleRes))
                   },
                   trailingContent = {
                     RadioButton(
@@ -378,7 +378,7 @@ object PlayerControlsPreferencesScreen : Screen {
     ) {
       if (buttons.isEmpty()) {
         Text(
-          "None", // TODO: strings
+          stringResource(R.string.player_button_none),
           style = MaterialTheme.typography.bodyMedium,
           color = MaterialTheme.colorScheme.outline,
         )
