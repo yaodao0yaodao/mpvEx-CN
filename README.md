@@ -1,9 +1,25 @@
 ![banner](fastlane/metadata/android/en-US/images/featureGraphic.png)
 
-# mpvExtended
-[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/marlboro-advance/mpvex.svg?logo=github&label=GitHub&cacheSeconds=3600)](https://github.com/marlboro-advance/mpvex/releases/latest)
-[![GitHub all releases](https://img.shields.io/github/downloads/marlboro-advance/mpvex/total?logo=github&cacheSeconds=3600)](https://github.com/marlboro-advance/mpvex/releases/latest)
+# mpvEx 中文版（mpvExtended 简体中文维护版）
+[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/yaodao0yaodao/mpvEx.svg?logo=github&label=GitHub&cacheSeconds=3600)](https://github.com/yaodao0yaodao/mpvEx/releases/latest)
+[![GitHub all releases](https://img.shields.io/github/downloads/yaodao0yaodao/mpvEx/total?logo=github&cacheSeconds=3600)](https://github.com/yaodao0yaodao/mpvEx/releases/latest)
 
+这是 [marlboro-advance/mpvEx](https://github.com/marlboro-advance/mpvEx) 的简体中文维护分支，播放器内的软件名称仍为 **mpvEx**。本项目以准确的视频播放术语补全中文界面，并在保留上游功能的基础上维护少量适合中文用户的改动。
+
+- **汉化日期：** 2026-08-19
+- **汉化时版本：** v1.2.9
+- **独立包名：** `io.github.yaodao0yaodao.mpvex`，可与上游版本同时安装
+- **构建架构：** 仅提供 `arm64-v8a`
+- **附加改动：** 画面比例设置永久保存；应用内更新指向本项目 Releases
+- **上游同步：** GitHub Actions 每日自动合并上游 `master`，随后构建 ARM64 APK；检测到上游正式版本时自动发布 Release
+
+## 项目简介
+
+mpvExtended 是基于 libmpv 的 Android 视频播放器，源自 [mpv-android](https://github.com/mpv-android/mpv-android)。它把 mpv 强大的格式兼容性、渲染与脚本能力，整合到适合触屏操作的 Material 3 界面中，支持硬件/软件解码、字幕与外部音轨、画中画、后台播放、网络串流、SMB/FTP/WebDAV、播放列表、逐帧导航和画面缩放等功能。
+
+本仓库重点维护完整的简体中文界面。若发现漏译、术语错误或上游同步造成的界面回退，请在本项目的 [Issues](https://github.com/yaodao0yaodao/mpvEx/issues) 中反馈，并附上界面路径和截图。
+
+## 上游介绍
 
 **mpvExtended is a fork of [mpv-android](https://github.com/mpv-android/mpv-android), built on the libmpv library. It aims
 to combine the powerful features of mpv with an easy to use interface and additional
@@ -28,25 +44,18 @@ features.**
 - Custom Playlist management support
 
 **This project is still in development and is expected to have bugs. Please report any bugs you find in
-the [Issues](https://github.com/marlboro-advance/mpvEx/issues) section.**
+the [upstream Issues](https://github.com/marlboro-advance/mpvEx/issues) section.**
 
 ---
 
 ## Installation
 
 ### Stable Release
-Download the latest stable version from the [GitHub releases page](https://github.com/marlboro-advance/mpvEx/releases).
+从本项目的 [GitHub Releases](https://github.com/yaodao0yaodao/mpvEx/releases) 下载最新的已签名 ARM64 APK。
 
-[![Download Release](https://img.shields.io/badge/Download-Release-blue?style=for-the-badge)](https://github.com/marlboro-advance/mpvEx/releases)
+[![Download Release](https://img.shields.io/badge/Download-ARM64%20APK-blue?style=for-the-badge)](https://github.com/yaodao0yaodao/mpvEx/releases/latest)
 
-Or you can get the stable releases here
-
-[<img src="https://gitlab.com/IzzyOnDroid/repo/-/raw/master/assets/IzzyOnDroidButtonGreyBorder_nofont.png" height="50" alt="Get it at IzzyOnDroid">](https://apt.izzysoft.de/packages/app.marlboroadvance.mpvex)
-
-### Preview Builds
-For testing purposes only
-
-[![Download Preview Builds](https://img.shields.io/badge/Download-Preview%20Builds-red?style=for-the-badge)](https://marlboro-advance.github.io/mpvEx/)
+> 本项目使用独立包名和签名，不能覆盖安装上游版本；两者可以共存。
 
 ---
 
@@ -77,15 +86,9 @@ For testing purposes only
 - Android SDK with build tools 34.0.0+
 - Git (for version information in builds)
 
-### APK Variants
+### APK Variant
 
-The app generates multiple APK variants for different CPU architectures:
-
-- **universal**: Works on all devices (larger size)
-- **arm64-v8a**: Modern 64-bit ARM devices (recommended for most users)
-- **armeabi-v7a**: Older 32-bit ARM devices
-- **x86**: Intel/AMD 32-bit devices
-- **x86_64**: Intel/AMD 64-bit devices
+This fork builds only **arm64-v8a**, for modern 64-bit ARM Android devices.
 
 ---
 
@@ -134,7 +137,7 @@ Copy the contents of `keystore.txt` and paste it as the value for the `SIGNING_K
    git tag -a v1.0.0 -m "Release version 1.0.0"
    git push origin v1.0.0
    ```
-4. GitHub Actions will automatically build, sign, and create a draft release
+4. GitHub Actions will automatically build and sign the ARM64 APK, generate its SHA-256 checksum, and publish the stable release
 
 ### Creating a Preview Release
 

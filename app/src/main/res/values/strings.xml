@@ -1,5 +1,5 @@
 <resources>
-  <string name="app_name" translatable="false">mpvEx 中文版</string>
+  <string name="app_name" translatable="false">mpvEx</string>
   <string name="generic_reset">Reset</string>
   <string name="generic_share">Share</string>
   <string name="generic_confirm">Confirm</string>
@@ -68,6 +68,9 @@
   <string name="theme_tokyo_night">Tokyo Night</string>
   <string name="theme_kanagawa">Kanagawa</string>
   <string name="theme_rose_pine">Rosé Pine</string>
+  <string name="seekbar_style_standard">Standard</string>
+  <string name="seekbar_style_wavy">Wavy</string>
+  <string name="seekbar_style_thick">Thick</string>
   <!-- Settings Search -->
   <string name="settings_search_hint">Search settings…</string>
   <string name="settings_search_no_results">No settings found</string>
@@ -108,6 +111,29 @@
   <string name="pref_layout_preview">Preview</string>
   <string name="pref_layout_reset_title">Reset layout?</string>
   <string name="pref_layout_reset_summary">All customized player control layouts will be reset to default positions</string>
+  <string name="player_button_back">Back</string>
+  <string name="player_button_video_title">Video title</string>
+  <string name="player_button_chapters_bookmarks">Chapters / bookmarks</string>
+  <string name="player_button_playback_speed">Playback speed</string>
+  <string name="player_button_decoder">Decoder</string>
+  <string name="player_button_screen_rotation">Screen rotation</string>
+  <string name="player_button_frame_navigation">Frame navigation</string>
+  <string name="player_button_video_zoom">Video zoom</string>
+  <string name="player_button_picture_in_picture">Picture-in-picture</string>
+  <string name="player_button_aspect_ratio">Aspect ratio</string>
+  <string name="player_button_lock_controls">Lock controls</string>
+  <string name="player_button_audio_track">Audio track</string>
+  <string name="player_button_subtitles">Subtitles</string>
+  <string name="player_button_more_options">More options</string>
+  <string name="player_button_current_chapter">Current chapter</string>
+  <string name="player_button_repeat_mode">Repeat mode</string>
+  <string name="player_button_shuffle">Shuffle</string>
+  <string name="player_button_horizontal_flip">Horizontal flip</string>
+  <string name="player_button_vertical_flip">Vertical flip</string>
+  <string name="player_button_ab_loop">A–B loop</string>
+  <string name="player_button_custom_skip">Custom skip</string>
+  <string name="player_button_background_playback">Background playback</string>
+  <string name="player_button_none">None</string>
   <string name="pref_player">Player</string>
   <string name="pref_player_summary">Orientation, gestures and controls</string>
   <string name="pref_player_orientation">Orientation</string>
@@ -134,6 +160,10 @@
   <string name="pref_player_gestures_horizontal_swipe_to_seek_summary">Swipe left or right on screen to seek forward or backward</string>
   <string name="pref_player_gestures_horizontal_swipe_sensitivity">Horizontal swipe sensitivity</string>
   <string name="pref_player_gestures_horizontal_swipe_sensitivity_summary">Adjust how much distance is covered per swipe</string>
+  <string name="pref_player_gestures_horizontal_swipe_sensitivity_value">Current: %1$d/100 (%2$s)</string>
+  <string name="sensitivity_low">Low</string>
+  <string name="sensitivity_medium">Medium</string>
+  <string name="sensitivity_high">High</string>
   <string name="pref_player_gestures_hold_for_multiple_speed">Hold for multi - x speed</string>
   <string name="pref_player_controls">Controls</string>
   <string name="pref_player_controls_allow_gestures_in_panels">Allow gestures in panels</string>
@@ -167,6 +197,17 @@
   <string name="pref_decoder">Decoder</string>
   <string name="pref_decoder_summary">Hardware decoding, pixel format, debanding</string>
   <string name="pref_decoder_profile_title">MPV Profile</string>
+  <string name="mpv_profile_fast">Fast</string>
+  <string name="mpv_profile_default">Default</string>
+  <string name="mpv_profile_high_quality">High quality</string>
+  <string name="mpv_profile_gpu_hq">GPU high quality</string>
+  <string name="mpv_profile_low_latency">Low latency</string>
+  <string name="mpv_profile_sw_fast">Fast software decoding</string>
+  <string name="player_decoder_auto_copy">Auto (copy)</string>
+  <string name="player_decoder_auto">Auto</string>
+  <string name="player_decoder_software">Software decoding</string>
+  <string name="player_decoder_hardware">Hardware decoding</string>
+  <string name="player_decoder_hardware_plus">Hardware decoding+</string>
   <string name="pref_decoder_try_hw_dec_title">Try hardware decoding</string>
   <string name="pref_decoder_gpu_next_title">Use gpu-next</string>
   <string name="pref_decoder_gpu_next_summary">A new rendering backend</string>
@@ -461,6 +502,8 @@
   <string name="add">Add</string>
   <string name="ignore">Ignore</string>
   <string name="check_for_updates_now">Check for updates now</string>
+  <string name="update_already_latest">You are already using the latest version</string>
+  <string name="update_check_failed">Unable to check for updates. Please try again later</string>
   <string name="loading_detailed_information">Loading detailed information…</string>
   <string name="stream_url">Stream URL</string>
   <string name="export_complete">Export complete</string>
