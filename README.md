@@ -8,10 +8,10 @@
 
 - **汉化日期：** 2026-08-19
 - **汉化时版本：** v1.2.9
-- **当前中文版版本：** v1.2.10
+- **当前中文版版本：** v1.2.9（跟随上游真实版本号，不单独抬高版本）
 - **独立包名：** `io.github.yaodao0yaodao.mpvex`，可与上游版本同时安装
 - **构建架构：** 仅提供 `arm64-v8a`
-- **附加改动：** 画面比例设置永久保存；应用内更新指向本项目 Releases
+- **附加改动：** 画面比例设置永久保存；字幕轨标题按有序关键词智能选择；应用内更新指向本项目 Releases
 - **上游同步：** GitHub Actions 每日自动合并上游 `master`，随后构建 ARM64 APK；检测到上游正式版本时自动发布 Release
 
 ## 项目简介
@@ -19,6 +19,13 @@
 mpvExtended 是基于 libmpv 的 Android 视频播放器，源自 [mpv-android](https://github.com/mpv-android/mpv-android)。它把 mpv 强大的格式兼容性、渲染与脚本能力，整合到适合触屏操作的 Material 3 界面中，支持硬件/软件解码、字幕与外部音轨、画中画、后台播放、网络串流、SMB/FTP/WebDAV、播放列表、逐帧导航和画面缩放等功能。
 
 本仓库重点维护完整的简体中文界面。若发现漏译、术语错误或上游同步造成的界面回退，请在本项目的 [Issues](https://github.com/yaodao0yaodao/mpvEx/issues) 中反馈，并附上界面路径和截图。
+
+## 中文版增强
+
+- 字幕“首选语言”默认使用 `特效,Simplified,chs,CN,简,ch,zh,中`，逐级匹配字幕轨标题；完全没有标题命中时仍按语言代码回退。
+- 在线字幕搜索默认选择 Chinese。
+- Anime4K 实验性放大功能提供独立的[预设与变体中文说明](docs/Anime4K.zh-CN.md)。
+- MPV 配置档中的 `GPU HQ` 已由 mpv 弃用，界面明确标记为“GPU HQ（已弃用）”。
 
 ## 上游介绍
 
@@ -131,7 +138,7 @@ Copy the contents of `keystore.txt` and paste it as the value for the `SIGNING_K
 
 ### Creating a Release
 
-1. Update `versionCode` and `versionName` in `app/build.gradle.kts`
+1. 按上游真实版本更新 `versionCode` 和 `versionName`；标签必须与 `versionName` 完全一致，工作流会拒绝虚构或不一致的版本
 2. Commit the changes
 3. Create and push a tag:
    ```bash

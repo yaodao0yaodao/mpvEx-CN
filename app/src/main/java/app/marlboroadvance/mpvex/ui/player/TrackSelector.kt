@@ -29,6 +29,7 @@ import kotlinx.coroutines.delay
  * **Subtitle Selection Strategy (Highest to Lowest Priority):**
  * Subtitle selection is highly dependent on the auto-detected media context (Anime vs. Live-Action).
  * - **Pass 00 (External Override):** Automatically prioritizes manually loaded external subtitle files.
+ * - **Pass 0 (Preferred Title):** Applies the user's ordered keywords to subtitle track titles.
  * - **Pass A0 (Anime Only - Native Default):** If exactly *one* subtitle track is flagged 
  * as default and it is Japanese, it is selected. This protects against muxing errors 
  * where multiple tracks are incorrectly flagged as default by the encoder.
@@ -247,16 +248,38 @@ class TrackSelector(
       val subTracks = tracks.filter { it.type == "sub" }
 
       // PASS 00: EXTERNAL TRACK OVERRIDE (Protects manually loaded subtitle files)
-      for (track in subTracks) {
-        if (track.external) {
-          if (currentSid == track.id) {
-            Log.d(TAG, "Smart Sub: External Subtitle Detected (id=${track.id}) [Already Active. Skipping Change.]")
-          } else {
-            Log.d(TAG, "Smart Sub: External Subtitle Detected (id=${track.id}) [Applied]")
-            MPVLib.setPropertyInt("sid", track.id)
-          }
-          return
+      val externalTracks = subTracks.filter(Track::external)
+      if (externalTracks.isNotEmpty()) {
+        val preferredExternalIndex = SubtitleTitleMatcher.findBestMatchIndex(
+          titles = externalTracks.map(Track::title),
+          orderedKeywords = preferredLangs,
+        )
+        val track = preferredExternalIndex?.let(externalTracks::get) ?: externalTracks.first()
+        if (currentSid == track.id) {
+          Log.d(TAG, "Smart Sub: External Subtitle Detected (id=${track.id}) [Already Active. Skipping Change.]")
+        } else {
+          Log.d(TAG, "Smart Sub: External Subtitle Detected (id=${track.id}) [Applied]")
+          MPVLib.setPropertyInt("sid", track.id)
         }
+        return
+      }
+
+      // PASS 0: ORDERED SUBTITLE TITLE PREFERENCES
+      // Each matching keyword narrows the remaining candidates. A later keyword is therefore
+      // used as a tie-breaker without ever overriding an earlier, higher-priority keyword.
+      val titleMatchIndex = SubtitleTitleMatcher.findBestMatchIndex(
+        titles = subTracks.map(Track::title),
+        orderedKeywords = preferredLangs,
+      )
+      if (titleMatchIndex != null) {
+        val track = subTracks[titleMatchIndex]
+        if (currentSid == track.id) {
+          Log.d(TAG, "Smart Sub: Preferred title matched (id=${track.id}) [Already Active. Skipping Change.]")
+        } else {
+          Log.d(TAG, "Smart Sub: Preferred title matched (id=${track.id}) [Applied]")
+          MPVLib.setPropertyInt("sid", track.id)
+        }
+        return
       }
 
       // PASS A0: KEEP FILE'S NATIVE DEFAULT JAPANESE SUBS FOR ANIME

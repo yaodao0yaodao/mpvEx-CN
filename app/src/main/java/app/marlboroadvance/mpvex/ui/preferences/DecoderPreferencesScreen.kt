@@ -277,12 +277,15 @@ object DecoderPreferencesScreen : Screen {
                       color = MaterialTheme.colorScheme.outline,
                     )
                     Text(
-                      text = "github.com/bloc97/Anime4K",
+                      text = stringResource(R.string.pref_anime4k_guide_link),
                       color = MaterialTheme.colorScheme.primary,
                       style = MaterialTheme.typography.bodySmall,
                       textDecoration = TextDecoration.Underline,
                       modifier = Modifier.clickable {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/bloc97/Anime4K"))
+                        val intent = Intent(
+                          Intent.ACTION_VIEW,
+                          Uri.parse("https://github.com/yaodao0yaodao/mpvEx/blob/master/docs/Anime4K.zh-CN.md"),
+                        )
                         context.startActivity(intent)
                       }
                     )

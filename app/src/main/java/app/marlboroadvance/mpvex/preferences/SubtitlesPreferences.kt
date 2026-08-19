@@ -15,7 +15,10 @@ import app.marlboroadvance.mpvex.ui.player.controls.components.panels.SubtitlesB
 class SubtitlesPreferences(
   preferenceStore: PreferenceStore,
 ) {
-  val preferredLanguages = preferenceStore.getString("sub_preferred_languages")
+  val preferredLanguages = preferenceStore.getString(
+    "sub_preferred_languages",
+    "特效,Simplified,chs,CN,简,ch,zh,中",
+  )
   val autoloadMatchingSubtitles = preferenceStore.getBoolean("sub_autoload_enabled", true)
 
   val fontsFolder = preferenceStore.getString("sub_fonts_folder")
@@ -46,7 +49,7 @@ class SubtitlesPreferences(
   
   val subdlApiKey = preferenceStore.getString("subdl_api_key", "")
   val subtitleSaveFolder = preferenceStore.getString("sub_save_folder", "")
-  val subdlLanguages = preferenceStore.getStringSet("subdl_languages", setOf("en"))
+  val subdlLanguages = preferenceStore.getStringSet("subdl_languages", setOf("zh"))
   
   val wyzieSources = preferenceStore.getStringSet("wyzie_sources", setOf("all"))
   val wyzieFormats = preferenceStore.getStringSet("wyzie_formats", setOf("srt", "ass"))

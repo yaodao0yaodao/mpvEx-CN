@@ -200,7 +200,7 @@
   <string name="mpv_profile_fast">Fast</string>
   <string name="mpv_profile_default">Default</string>
   <string name="mpv_profile_high_quality">High quality</string>
-  <string name="mpv_profile_gpu_hq">GPU high quality</string>
+  <string name="mpv_profile_gpu_hq">GPU HQ (deprecated)</string>
   <string name="mpv_profile_low_latency">Low latency</string>
   <string name="mpv_profile_sw_fast">Fast software decoding</string>
   <string name="player_decoder_auto_copy">Auto (copy)</string>
@@ -273,6 +273,7 @@
   <string name="pref_advanced_features_tooltip">Enable experimental or advanced features such as stats page and Anime4K upscaling</string>
   <string name="pref_anime4k_title">Anime4K upscaling (Experimental)</string>
   <string name="pref_anime4k_summary">Enable Anime4K upscaling filter</string>
+  <string name="pref_anime4k_guide_link">Anime4K presets and variants guide</string>
   <string name="pref_anime4k_incompatibility">Anime4K Incompatibility</string>
   <string name="pref_anime4k_gpu_next_error">gpu-next is incompatible with Anime4K shaders. When Anime4K is enabled, the app will automatically use the legacy \'gpu\' backend for shader compatibility.</string>
   <string name="pref_anime4k_cannot_use_with_gpu_next">Cannot use Anime4K when gpu-next is enabled</string>
@@ -427,6 +428,8 @@
   <string name="not_set_video_default">Not set (will use video default)</string>
   <string name="enter_language_codes">Enter language codes separated by commas (e.g., eng,jpn,spa)</string>
   <string name="language_codes_placeholder">eng,jpn,spa</string>
+  <string name="enter_subtitle_title_preferences">Enter subtitle-title keywords or language codes in priority order, separated by commas. Earlier matches take precedence.</string>
+  <string name="subtitle_title_preferences_placeholder">effects,Simplified,chs,CN,simplified Chinese,ch,zh,Chinese</string>
   <string name="pref_audio_channels_auto_safe_desc">Default, safe auto selection</string>
   <string name="pref_audio_channels_auto_desc">Auto selection</string>
   <string name="pref_audio_channels_mono_desc">Downmix to mono</string>
