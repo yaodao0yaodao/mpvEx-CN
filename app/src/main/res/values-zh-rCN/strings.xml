@@ -194,7 +194,7 @@
   <string name="mpv_profile_fast">快速</string>
   <string name="mpv_profile_default">默认</string>
   <string name="mpv_profile_high_quality">高质量</string>
-  <string name="mpv_profile_gpu_hq">GPU 高质量</string>
+  <string name="mpv_profile_gpu_hq">GPU HQ（已弃用）</string>
   <string name="mpv_profile_low_latency">低延迟</string>
   <string name="mpv_profile_sw_fast">软件解码快速模式</string>
   <string name="player_decoder_auto_copy">自动（复制模式）</string>
@@ -267,6 +267,7 @@
   <string name="pref_advanced_features_tooltip">启用统计页面和 Anime4K 放大等实验性或高级功能</string>
   <string name="pref_anime4k_title">Anime4K 放大（实验性）</string>
   <string name="pref_anime4k_summary">启用 Anime4K 放大滤镜</string>
+  <string name="pref_anime4k_guide_link">查看本项目的 Anime4K 预设与变体说明</string>
   <string name="pref_anime4k_incompatibility">Anime4K 不兼容</string>
   <string name="pref_anime4k_gpu_next_error">gpu-next 与 Anime4K 着色器不兼容。启用 Anime4K 时，应用会自动改用旧版“gpu”后端以确保着色器兼容。</string>
   <string name="pref_anime4k_cannot_use_with_gpu_next">启用 gpu-next 时无法使用 Anime4K</string>
@@ -407,6 +408,8 @@
   <string name="not_set_video_default">未设置（使用视频默认值）</string>
   <string name="enter_language_codes">输入用逗号分隔的语言代码（例如 zho,eng,jpn）</string>
   <string name="language_codes_placeholder">zho,eng,jpn</string>
+  <string name="enter_subtitle_title_preferences">按优先级输入字幕轨标题关键词或语言代码，用逗号分隔；越靠前优先级越高，并列时继续匹配后续关键词。</string>
+  <string name="subtitle_title_preferences_placeholder">特效,Simplified,chs,CN,简,ch,zh,中</string>
   <string name="pref_audio_channels_auto_safe_desc">默认的安全自动选择</string>
   <string name="pref_audio_channels_auto_desc">自动选择</string>
   <string name="pref_audio_channels_mono_desc">混音为单声道</string>

@@ -19,8 +19,8 @@ android {
     applicationId = "io.github.yaodao0yaodao.mpvex"
     minSdk = 26
     targetSdk = 36
-    versionCode = 130
-    versionName = "1.2.10"
+    versionCode = 129
+    versionName = "1.2.9"
 
     vectorDrawables {
       useSupportLibrary = true
@@ -219,6 +219,8 @@ dependencies {
   implementation(libs.nanohttpd)
   implementation(libs.lazycolumnscrollbar)
   implementation(libs.reorderable)
+
+  testImplementation("junit:junit:4.13.2")
 }
 
 /* ---------------- Git helpers ---------------- */

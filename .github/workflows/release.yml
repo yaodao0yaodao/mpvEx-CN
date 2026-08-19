@@ -24,6 +24,16 @@ jobs:
           java-version: '17'
           cache: gradle
 
+      - name: Verify tag matches the app version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version_name="$(sed -nE 's/^[[:space:]]*versionName = "([^"]+)"/\1/p' app/build.gradle.kts | head -n 1)"
+          if [ "v${version_name}" != "$GITHUB_REF_NAME" ]; then
+            echo "Release tag $GITHUB_REF_NAME does not match app version v${version_name}."
+            exit 1
+          fi
+
       - name: Build ARM64 release APK
         run: |
           chmod +x ./gradlew
