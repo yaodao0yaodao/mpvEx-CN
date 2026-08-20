@@ -71,9 +71,9 @@ class Anime4KSafetyPolicyTest {
   fun `frame pressure uses counter deltas instead of lifetime totals`() {
     val tracker = FramePressureTracker()
 
-    assertFalse(tracker.sample(FrameCounters(100, 100, 100, 1.0)))
-    assertFalse(tracker.sample(FrameCounters(101, 102, 104, 1.0)))
-    assertTrue(tracker.sample(FrameCounters(105, 102, 104, 1.0)))
+    assertFalse(tracker.sample(FrameCounters(100, 100, 100)))
+    assertFalse(tracker.sample(FrameCounters(101, 102, 104)))
+    assertTrue(tracker.sample(FrameCounters(105, 102, 104)))
   }
 
   @Test

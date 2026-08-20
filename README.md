@@ -4,16 +4,16 @@
 [![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/yaodao0yaodao/mpvEx-CN.svg?logo=github&label=GitHub&cacheSeconds=3600)](https://github.com/yaodao0yaodao/mpvEx-CN/releases/latest)
 [![GitHub all releases](https://img.shields.io/github/downloads/yaodao0yaodao/mpvEx-CN/total?logo=github&cacheSeconds=3600)](https://github.com/yaodao0yaodao/mpvEx-CN/releases/latest)
 
-这是面向中文用户独立维护的 Android mpv/libmpv 开源视频播放器，源自 [marlboro-advance/mpvEx](https://github.com/marlboro-advance/mpvEx)，播放器内的软件名称仍为 **mpvEx**。项目提供完整简体中文界面、ARM64 APK、Anime4K/ArtCNN 放大、hdr-toys HDR 管线、智能播放保护、字幕轨标题智能匹配等增强。
+这是面向中文用户独立维护的 Android mpv/libmpv 开源视频播放器，源自 [marlboro-advance/mpvEx](https://github.com/marlboro-advance/mpvEx)，播放器内的软件名称仍为 **mpvEx**。项目提供完整简体中文界面、ARM64 APK、Anime4K/ArtCNN 放大、SDR→HDR 增强、智能播放保护、字幕轨标题智能匹配等实用改进。
 
-ArtCNN、HDR、智能渲染后端及部分播放性能保护的设计与实现参考并适配自 [Riteshp2001/mpvRx](https://github.com/Riteshp2001/mpvRx)。由于两个项目的代码结构不同，本项目采用了独立适配；温控判断按 Android 官方 API 的数值含义重新实现，并非直接复制。
+ArtCNN、SDR→HDR 增强、智能渲染后端及部分播放性能保护的设计与实现参考并适配自 [Riteshp2001/mpvRx](https://github.com/Riteshp2001/mpvRx)。由于两个项目的代码结构不同，本项目采用了独立适配；温控判断按 Android 官方 API 的数值含义重新实现，并非直接复制。
 
 - **汉化日期：** 2026-08-19
 - **汉化时版本：** v1.2.9
-- **当前中文版版本：** v1.3.0
+- **当前中文版版本：** v1.3.1
 - **独立包名：** `io.github.yaodao0yaodao.mpvex`，可与上游版本同时安装
 - **构建架构：** 仅提供 `arm64-v8a`
-- **附加改动：** 画面比例永久保存；字幕轨标题智能选择；音量调节优化；可靠缩略图；ArtCNN；四种 HDR 输出模式；SDR→HDR 增强；智能渲染后端；自适应播放位置轮询；4K/8K Anime4K 保护；温控与帧压保护；应用内更新指向本项目 Releases
+- **附加改动：** 画面比例永久保存；字幕轨标题智能选择；音量调节优化；可靠缩略图；ArtCNN；播放中永久保存的 SDR→HDR 增强控件；智能渲染后端；自适应播放位置轮询；4K/8K Anime4K 保护；温控与帧压保护；无声无首帧泄漏的历史进度续播；应用内更新指向本项目 Releases
 - **上游同步：** GitHub Actions 每日自动合并上游 `master`，随后构建 ARM64 APK；检测到上游正式版本时自动发布 Release
 
 ## 项目简介
@@ -33,7 +33,8 @@ mpvExtended 是基于 libmpv 的 Android 视频播放器，源自 [mpv-android](
 - 字幕“首选语言”默认使用 `特效,Simplified,chs,CN,简,ch,zh,中`，逐级匹配字幕轨标题；完全没有标题命中时仍按语言代码回退。
 - 在线字幕搜索默认选择 Chinese。
 - Anime4K 实验性放大功能提供独立的[预设与变体中文说明](docs/Anime4K.zh-CN.md)。
-- Anime4K 新增 ArtCNN 固定模型；HDR 功能提供 BT.2100 PQ、BT.2100 HLG、BT.2020 与线性 HDR，详见 [HDR 输出说明](docs/HDR.zh-CN.md)。
+- Anime4K 新增 ArtCNN 固定模型。播放器不再提供 PQ、HLG、BT.2020、Linear 等手动 HDR 模式：原生 HDR 交给 mpv 自动处理，唯一可调功能是播放界面中的 SDR→HDR 增强。该控件会永久保存选择，不再与解码器设置页维护两套开关。
+- 历史进度会在 `loadfile` 时直接作为起始位置交给 mpv，避免先播放文件开头再跳转造成的首帧和短暂声音泄漏；切集时复用 HDR 与着色器状态，减少重复重建渲染管线。
 - 播放器根据控件可见性和暂停状态降低位置查询频率，减少不必要的 JNI 唤醒。
 - 4K/8K 视频从底层禁用 Anime4K；普通 Anime4K 可在温控或持续帧压力下临时降档，ArtCNN 只会临时关闭或恢复，不会替换为其他预设。
 - Vulkan 设置下方提供[解码器与省电配置中文说明](docs/Decoder-and-Battery.zh-CN.md)，帮助在画质、性能和续航之间取舍。
@@ -145,7 +146,7 @@ Copy the contents of `keystore.txt` and paste it as the value for the `SIGNING_K
 
 ### Creating a Release
 
-1. 上游正式版本使用原三段版本号；中文版修复和小功能在其后递增第四段（例如 `1.2.9.1`、`1.2.9.2`）。标签必须与 `versionName` 完全一致
+1. 发布标签必须与应用的 `versionName` 完全一致；修复版本递增补丁号（例如 `1.3.0` → `1.3.1`）
 2. Commit the changes
 3. Create and push a tag:
    ```bash
@@ -171,8 +172,7 @@ Copy the contents of `keystore.txt` and paste it as the value for the `SIGNING_K
 - [mpvKt](https://github.com/abdallahmehiz/mpvKt)
 - [Next player](https://github.com/anilbeesetti/nextplayer)
 - [Gramophone](https://github.com/FoedusProgramme/Gramophone)
-- [mpvRx](https://github.com/Riteshp2001/mpvRx)（ArtCNN 与 HDR 功能参考实现）
-- [hdr-toys](https://github.com/natural-harmonia-gropius/hdr-toys)（MIT License）
+- [mpvRx](https://github.com/Riteshp2001/mpvRx)（ArtCNN、SDR→HDR 增强及部分性能功能参考实现）
 
 ---
 

@@ -3,7 +3,6 @@ package app.marlboroadvance.mpvex.preferences
 import app.marlboroadvance.mpvex.preferences.preference.PreferenceStore
 import app.marlboroadvance.mpvex.preferences.preference.getEnum
 import app.marlboroadvance.mpvex.ui.player.Debanding
-import app.marlboroadvance.mpvex.ui.player.HdrScreenMode
 
 class DecoderPreferences(
   preferenceStore: PreferenceStore,
@@ -12,8 +11,6 @@ class DecoderPreferences(
   val tryHWDecoding = preferenceStore.getBoolean("try_hw_dec", true)
   val gpuNext = preferenceStore.getBoolean("gpu_next")
   val useVulkan = preferenceStore.getBoolean("use_vulkan", false)
-  val hdrScreenOutput = preferenceStore.getBoolean("hdr_screen_output", false)
-  val hdrScreenMode = preferenceStore.getEnum("hdr_screen_mode", HdrScreenMode.BT_2020)
   val boostSdrToHdr = preferenceStore.getBoolean("boost_sdr_to_hdr", false)
   val useYUV420P = preferenceStore.getBoolean("use_yuv420p", false)
 

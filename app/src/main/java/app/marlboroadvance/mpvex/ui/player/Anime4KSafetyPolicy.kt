@@ -104,7 +104,6 @@ data class FrameCounters(
   val dropped: Int,
   val delayed: Int,
   val mistimed: Int,
-  val averageDelayMs: Double,
 )
 
 class FramePressureTracker {
@@ -119,6 +118,6 @@ class FramePressureTracker {
     val droppedDelta = (current.dropped - old.dropped).coerceAtLeast(0)
     val delayedDelta = (current.delayed - old.delayed).coerceAtLeast(0)
     val mistimedDelta = (current.mistimed - old.mistimed).coerceAtLeast(0)
-    return droppedDelta >= 3 || delayedDelta >= 8 || mistimedDelta >= 12 || current.averageDelayMs >= 12.0
+    return droppedDelta >= 3 || delayedDelta >= 8 || mistimedDelta >= 12
   }
 }

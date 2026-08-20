@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.Shuffle
 import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Headset
+import androidx.compose.material.icons.outlined.HdrOn
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -42,6 +43,7 @@ enum class PlayerButton(
   BOOKMARKS_CHAPTERS(Icons.Outlined.Bookmarks),
   PLAYBACK_SPEED(Icons.Outlined.Speed),
   DECODER(Icons.Outlined.Memory),
+  HDR_MODE(Icons.Outlined.HdrOn),
   SCREEN_ROTATION(Icons.Outlined.ScreenRotation),
   FRAME_NAVIGATION(Icons.Outlined.Camera),
   VIDEO_ZOOM(Icons.Outlined.ZoomIn),
@@ -84,6 +86,7 @@ fun getPlayerButtonLabel(button: PlayerButton): String =
     PlayerButton.BOOKMARKS_CHAPTERS -> stringResource(R.string.player_button_chapters_bookmarks)
     PlayerButton.PLAYBACK_SPEED -> stringResource(R.string.player_button_playback_speed)
     PlayerButton.DECODER -> stringResource(R.string.player_button_decoder)
+    PlayerButton.HDR_MODE -> stringResource(R.string.player_button_hdr)
     PlayerButton.SCREEN_ROTATION -> stringResource(R.string.player_button_screen_rotation)
     PlayerButton.FRAME_NAVIGATION -> stringResource(R.string.player_button_frame_navigation)
     PlayerButton.VIDEO_ZOOM -> stringResource(R.string.player_button_video_zoom)

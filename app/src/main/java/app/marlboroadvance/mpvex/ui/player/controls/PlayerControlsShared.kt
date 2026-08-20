@@ -51,6 +51,8 @@ import androidx.compose.material.icons.filled.Flip
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Headset
+import androidx.compose.material.icons.filled.HdrOff
+import androidx.compose.material.icons.filled.HdrOn
 import androidx.compose.material.icons.filled.BlurOn
 import androidx.compose.material.icons.outlined.BlurOn
 import androidx.compose.material.icons.outlined.Autorenew
@@ -83,6 +85,7 @@ import app.marlboroadvance.mpvex.ui.player.PlayerActivity
 import app.marlboroadvance.mpvex.ui.player.PlayerViewModel
 import app.marlboroadvance.mpvex.ui.player.Sheets
 import app.marlboroadvance.mpvex.ui.player.VideoAspect
+import app.marlboroadvance.mpvex.ui.player.VideoDynamicRange
 import app.marlboroadvance.mpvex.ui.player.controls.components.ControlsButton
 import app.marlboroadvance.mpvex.ui.player.controls.components.CurrentChapter
 import app.marlboroadvance.mpvex.ui.theme.controlColor
@@ -319,6 +322,21 @@ fun RenderPlayerButton(
           )
         }
       }
+    }
+
+    PlayerButton.HDR_MODE -> {
+      val dynamicRange by viewModel.videoDynamicRange.collectAsState()
+      val sdrBoostEnabled by viewModel.sdrHdrBoostEnabled.collectAsState()
+      val active = viewModel.hdrPipelineAvailable &&
+        (dynamicRange == VideoDynamicRange.HDR ||
+          (dynamicRange == VideoDynamicRange.SDR && sdrBoostEnabled))
+      ControlsButton(
+        icon = if (active) Icons.Default.HdrOn else Icons.Default.HdrOff,
+        onClick = viewModel::toggleHdrPlayback,
+        color = if (active) MaterialTheme.colorScheme.primary
+        else if (hideBackground) controlColor else MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.size(buttonSize),
+      )
     }
 
     PlayerButton.SCREEN_ROTATION -> {

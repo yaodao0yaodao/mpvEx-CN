@@ -46,13 +46,11 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import app.marlboroadvance.mpvex.R
 import app.marlboroadvance.mpvex.domain.anime4k.Anime4KManager
-import app.marlboroadvance.mpvex.domain.hdr.HdrToysManager
 import app.marlboroadvance.mpvex.preferences.AdvancedPreferences
 import app.marlboroadvance.mpvex.preferences.DecoderPreferences
 import app.marlboroadvance.mpvex.preferences.PlayerPreferences
 import app.marlboroadvance.mpvex.preferences.preference.collectAsState
 import app.marlboroadvance.mpvex.presentation.components.PlayerSheet
-import app.marlboroadvance.mpvex.ui.player.HdrScreenMode
 import app.marlboroadvance.mpvex.ui.theme.spacing
 import `is`.xyz.mpv.MPVLib
 import kotlinx.coroutines.Dispatchers
@@ -72,7 +70,6 @@ fun MoreSheet(
   val advancedPreferences = koinInject<AdvancedPreferences>()
   val decoderPreferences = koinInject<DecoderPreferences>()
   val anime4kManager = koinInject<Anime4KManager>()
-  val hdrToysManager = koinInject<HdrToysManager>()
   koinInject<PlayerPreferences>()
   val statisticsPage by advancedPreferences.enabledStatisticsPage.collectAsState()
   
@@ -85,17 +82,7 @@ fun MoreSheet(
   val context = LocalContext.current
   val scope = rememberCoroutineScope()
 
-  fun combinedShaderChain(animeShaderChain: String): String {
-    val animePaths = animeShaderChain.takeIf(String::isNotEmpty)?.split(":").orEmpty()
-    val hdrMode =
-      if (decoderPreferences.hdrScreenOutput.get()) {
-        decoderPreferences.hdrScreenMode.get()
-      } else {
-        HdrScreenMode.OFF
-      }
-    val hdrPaths = hdrMode.hdrToysProfile?.let(hdrToysManager::getShaderPaths).orEmpty()
-    return (animePaths + hdrPaths).joinToString(":")
-  }
+  fun combinedShaderChain(animeShaderChain: String): String = animeShaderChain
 
   PlayerSheet(
     onDismissRequest,
