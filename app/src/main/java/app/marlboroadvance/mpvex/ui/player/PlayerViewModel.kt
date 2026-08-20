@@ -374,6 +374,7 @@ class PlayerViewModel(
   private companion object {
     const val TAG = "PlayerViewModel"
     const val SEEK_COALESCE_DELAY_MS = 60L
+    const val MPV_VOLUME_KEY_STEP = 5
     val VALID_SUBTITLE_EXTENSIONS =
       setOf(
         // Common & modern
@@ -1016,19 +1017,28 @@ class PlayerViewModel(
   }
 
   fun changeVolumeBy(change: Int) {
+    if (change == 0) return
+
     val mpvVolume = MPVLib.getPropertyInt("volume")
     val absoluteMaxVolume = volumeBoostCap ?: (audioPreferences.volumeBoostCap.get() + 100)
 
-    if (absoluteMaxVolume > 100 && currentVolume.value == maxVolume) {
-      if (mpvVolume == 100 && change < 0) {
-        changeVolumeTo(currentVolume.value + change)
+    if (absoluteMaxVolume > 100 && currentVolume.value == maxVolume && mpvVolume != null) {
+      if (change > 0 && mpvVolume < absoluteMaxVolume) {
+        changeMPVVolumeTo((mpvVolume + MPV_VOLUME_KEY_STEP).coerceAtMost(absoluteMaxVolume))
+        return
       }
-      val finalMPVVolume = (mpvVolume?.plus(change))?.coerceAtLeast(100) ?: 100
-      if (finalMPVVolume in 100..absoluteMaxVolume) {
-        return changeMPVVolumeTo(finalMPVVolume)
+      if (change < 0 && mpvVolume > 100) {
+        changeMPVVolumeTo((mpvVolume - MPV_VOLUME_KEY_STEP).coerceAtLeast(100))
+        return
       }
     }
-    changeVolumeTo(currentVolume.value + change)
+
+    host.audioManager.adjustStreamVolume(
+      AudioManager.STREAM_MUSIC,
+      if (change > 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER,
+      0,
+    )
+    currentVolume.value = host.audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
   }
 
   fun changeVolumeTo(volume: Int) {

@@ -1,10 +1,7 @@
 package app.marlboroadvance.mpvex.ui.player.controls.components.sheets
 
-import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
-import android.provider.MediaStore
-import android.provider.MediaStore.Video.Thumbnails
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -50,7 +47,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -64,10 +60,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.geometry.Offset
 import app.marlboroadvance.mpvex.presentation.components.PlayerSheet
 import app.marlboroadvance.mpvex.preferences.preference.collectAsState
+import app.marlboroadvance.mpvex.domain.thumbnail.ThumbnailRepository
 import app.marlboroadvance.mpvex.ui.theme.spacing
 import kotlinx.collections.immutable.ImmutableList
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import org.koin.compose.koinInject
 
 data class PlaylistItem(
   val uri: Uri,
@@ -103,129 +99,6 @@ class LRUBitmapCache(private val maxSize: Int) {
   fun clear() = synchronized(this) { cache.clear() }
 }
 
-/**
- * Loads a thumbnail from MediaStore cache (much faster than generating new thumbnails).
- * Uses the modern loadThumbnail API on Android Q+ for better performance.
- * Falls back to null if no cached thumbnail exists (in which case a placeholder will be shown).
- */
-private suspend fun loadMediaStoreThumbnail(context: Context, uri: Uri): Bitmap? {
-  return withContext(Dispatchers.IO) {
-    try {
-      when (uri.scheme) {
-        // For content:// URIs, we need to find the video ID first
-        "content" -> {
-          val videoId = extractVideoId(uri, context)
-          if (videoId != null) {
-            // Use modern API on Android Q+
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-              val contentUri = android.content.ContentUris.withAppendedId(
-                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-                videoId
-              )
-              context.contentResolver.loadThumbnail(
-                contentUri,
-                android.util.Size(512, 512),
-                null
-              )
-            } else {
-              @Suppress("DEPRECATION")
-              Thumbnails.getThumbnail(
-                context.contentResolver,
-                videoId,
-                Thumbnails.MINI_KIND,
-                null
-              )
-            }
-          } else {
-            null
-          }
-        }
-        // For file:// URIs, try to find the corresponding MediaStore entry
-        "file" -> {
-          val filePath = uri.path ?: return@withContext null
-          val projection = arrayOf(MediaStore.Video.Media._ID)
-          val selection = "${MediaStore.Video.Media.DATA} = ?"
-          val selectionArgs = arrayOf(filePath)
-
-          context.contentResolver.query(
-            MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-            projection,
-            selection,
-            selectionArgs,
-            null
-          )?.use { cursor ->
-            if (cursor.moveToFirst()) {
-              val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
-              val videoId = cursor.getLong(idColumn)
-              
-              // Use modern API on Android Q+
-              if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                val contentUri = android.content.ContentUris.withAppendedId(
-                  MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-                  videoId
-                )
-                context.contentResolver.loadThumbnail(
-                  contentUri,
-                  android.util.Size(512, 512),
-                  null
-                )
-              } else {
-                @Suppress("DEPRECATION")
-                Thumbnails.getThumbnail(
-                  context.contentResolver,
-                  videoId,
-                  Thumbnails.MINI_KIND,
-                  null
-                )
-              }
-            } else {
-              null
-            }
-          }
-        }
-        else -> null
-      }
-    } catch (e: Exception) {
-      // Fallback with placeholder if thumbnail loading fails
-      android.util.Log.w("PlaylistSheet", "Failed to load MediaStore thumbnail for $uri", e)
-      null
-    }
-  }
-}
-
-/**
- * Extracts the video ID from a content:// URI.
- */
-private fun extractVideoId(uri: Uri, context: Context): Long? {
-  return try {
-    val path = uri.path ?: return null
-    // Extract ID from path like /external/video/media/123
-    val idString = path.substringAfterLast('/').toLongOrNull() ?: return null
-
-    // Verify this ID exists in MediaStore
-    val projection = arrayOf(MediaStore.Video.Media._ID)
-    val selection = "${MediaStore.Video.Media._ID} = ?"
-    val selectionArgs = arrayOf(idString.toString())
-
-    context.contentResolver.query(
-      MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-      projection,
-      selection,
-      selectionArgs,
-      null
-    )?.use { cursor ->
-      if (cursor.moveToFirst()) {
-        val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
-        cursor.getLong(idColumn)
-      } else {
-        null
-      }
-    }
-  } catch (e: Exception) {
-    null
-  }
-}
-
 @Composable
 fun PlaylistSheet(
   playlist: ImmutableList<PlaylistItem>,
@@ -236,8 +109,8 @@ fun PlaylistSheet(
   playerPreferences: app.marlboroadvance.mpvex.preferences.PlayerPreferences,
   modifier: Modifier = Modifier,
 ) {
-  val context = LocalContext.current
   val configuration = LocalConfiguration.current
+  val thumbnailRepository = koinInject<ThumbnailRepository>()
 
   val accentColor = MaterialTheme.colorScheme.primary
 
@@ -379,7 +252,7 @@ fun PlaylistSheet(
             items(playlist) { item ->
               PlaylistTrackListItem(
                 item = item,
-                context = context,
+                thumbnailRepository = thumbnailRepository,
                 thumbnailCache = thumbnailCache,
                 onClick = { onItemClick(item) },
                 skipThumbnail = isM3UPlaylist,
@@ -400,7 +273,7 @@ fun PlaylistSheet(
             items(playlist) { item ->
               PlaylistTrackGridItem(
                 item = item,
-                context = context,
+                thumbnailRepository = thumbnailRepository,
                 thumbnailCache = thumbnailCache as LRUBitmapCache,
                 onClick = {
                   onItemClick(item)
@@ -418,7 +291,7 @@ fun PlaylistSheet(
 @Composable
 fun PlaylistTrackListItem(
   item: PlaylistItem,
-  context: Context,
+  thumbnailRepository: ThumbnailRepository,
   thumbnailCache: LRUBitmapCache,
   onClick: () -> Unit,
   skipThumbnail: Boolean = false,
@@ -438,9 +311,9 @@ fun PlaylistTrackListItem(
   // Skip thumbnail loading for M3U playlists (network streams)
   LaunchedEffect(videoPath) {
     if (!skipThumbnail && !thumbnailCache.containsKey(videoPath)) {
-      val bmp = loadMediaStoreThumbnail(context, item.uri)
+      val bmp = thumbnailRepository.getThumbnailForUri(item.uri, item.path, item.title, 512, 288)
       thumbnail = bmp
-      thumbnailCache[videoPath] = bmp
+      if (bmp != null) thumbnailCache[videoPath] = bmp
     }
   }
 
@@ -618,7 +491,7 @@ fun PlaylistTrackListItem(
 @Composable
 fun PlaylistTrackGridItem(
   item: PlaylistItem,
-  context: Context,
+  thumbnailRepository: ThumbnailRepository,
   thumbnailCache: LRUBitmapCache,
   onClick: () -> Unit,
   skipThumbnail: Boolean = false,
@@ -638,9 +511,9 @@ fun PlaylistTrackGridItem(
   // Skip thumbnail loading for M3U playlists (network streams)
   LaunchedEffect(videoPath) {
     if (!skipThumbnail && !thumbnailCache.containsKey(videoPath)) {
-      val bmp = loadMediaStoreThumbnail(context, item.uri)
+      val bmp = thumbnailRepository.getThumbnailForUri(item.uri, item.path, item.title, 512, 288)
       thumbnail = bmp
-      thumbnailCache[videoPath] = bmp
+      if (bmp != null) thumbnailCache[videoPath] = bmp
     }
   }
 
