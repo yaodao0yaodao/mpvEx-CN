@@ -1,11 +1,7 @@
 package app.marlboroadvance.mpvex.ui.preferences
 
-import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
-import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -42,9 +38,10 @@ import app.marlboroadvance.mpvex.preferences.DecoderPreferences
 import app.marlboroadvance.mpvex.preferences.preference.collectAsState
 import app.marlboroadvance.mpvex.presentation.Screen
 import app.marlboroadvance.mpvex.ui.player.Debanding
+import app.marlboroadvance.mpvex.ui.player.HdrScreenMode
 import app.marlboroadvance.mpvex.ui.player.MPVProfile
+import app.marlboroadvance.mpvex.ui.player.VulkanCapabilities
 import app.marlboroadvance.mpvex.ui.utils.LocalBackStack
-import app.marlboroadvance.mpvex.ui.preferences.VulkanUtils
 import kotlinx.serialization.Serializable
 import me.zhanghai.compose.preference.ListPreference
 import me.zhanghai.compose.preference.ProvidePreferenceLocals
@@ -59,7 +56,7 @@ object DecoderPreferencesScreen : Screen {
     val preferences = koinInject<DecoderPreferences>()
     val backstack = LocalBackStack.current
     val context = LocalContext.current
-    val isVulkanSupported = remember { VulkanUtils.isVulkanSupported(context) }
+    val isVulkanSupported = remember { VulkanCapabilities.isDeviceSupported(context) }
     var showGpuNextWarning by remember { mutableStateOf(false) }
     Scaffold(
       topBar = {
@@ -242,6 +239,101 @@ object DecoderPreferencesScreen : Screen {
 
               PreferenceDivider()
 
+              val hdrOutputEnabled by preferences.hdrScreenOutput.collectAsState()
+              SwitchPreference(
+                value = hdrOutputEnabled,
+                onValueChange = { enabled ->
+                  preferences.hdrScreenOutput.set(enabled)
+                  if (enabled) {
+                    preferences.gpuNext.set(true)
+                    if (isVulkanSupported) preferences.useVulkan.set(true)
+                  }
+                },
+                title = { Text(stringResource(R.string.pref_hdr_output_title)) },
+                summary = {
+                  Column {
+                    Text(
+                      stringResource(R.string.pref_hdr_output_summary),
+                      color = MaterialTheme.colorScheme.outline,
+                    )
+                    Text(
+                      text = stringResource(R.string.pref_hdr_guide_link),
+                      color = MaterialTheme.colorScheme.primary,
+                      style = MaterialTheme.typography.bodySmall,
+                      textDecoration = TextDecoration.Underline,
+                      modifier =
+                        Modifier.clickable {
+                          val intent =
+                            Intent(
+                              Intent.ACTION_VIEW,
+                              Uri.parse("https://github.com/yaodao0yaodao/mpvEx-CN/blob/master/docs/HDR.zh-CN.md"),
+                            )
+                          context.startActivity(intent)
+                        },
+                    )
+                  }
+                },
+              )
+
+              PreferenceDivider()
+
+              val hdrMode by preferences.hdrScreenMode.collectAsState()
+              val availableHdrModes =
+                remember(isVulkanSupported) {
+                  if (isVulkanSupported) {
+                    HdrScreenMode.selectableModes
+                  } else {
+                    HdrScreenMode.selectableModes.filterNot { it == HdrScreenMode.LINEAR }
+                  }
+                }
+              val displayedHdrMode =
+                hdrMode.takeIf { it in availableHdrModes } ?: HdrScreenMode.defaultEnabledMode
+              ListPreference(
+                value = displayedHdrMode,
+                onValueChange = { mode ->
+                  preferences.hdrScreenMode.set(mode)
+                  preferences.gpuNext.set(true)
+                  if (isVulkanSupported) preferences.useVulkan.set(true)
+                },
+                values = availableHdrModes,
+                valueToText = { AnnotatedString(context.getString(it.titleRes)) },
+                enabled = hdrOutputEnabled,
+                title = { Text(stringResource(R.string.pref_hdr_mode_title)) },
+                summary = {
+                  Column {
+                    Text(
+                      stringResource(displayedHdrMode.descriptionRes),
+                      color = MaterialTheme.colorScheme.outline,
+                    )
+                    Text(
+                      stringResource(R.string.pref_hdr_mode_restart_summary),
+                      style = MaterialTheme.typography.bodySmall,
+                      color = MaterialTheme.colorScheme.primary,
+                    )
+                  }
+                },
+              )
+
+              if (displayedHdrMode == HdrScreenMode.LINEAR) {
+                PreferenceDivider()
+
+                val boostSdrToHdr by preferences.boostSdrToHdr.collectAsState()
+                SwitchPreference(
+                  value = boostSdrToHdr,
+                  onValueChange = { preferences.boostSdrToHdr.set(it) },
+                  enabled = hdrOutputEnabled && isVulkanSupported,
+                  title = { Text(stringResource(R.string.pref_hdr_boost_sdr_title)) },
+                  summary = {
+                    Text(
+                      stringResource(R.string.pref_hdr_boost_sdr_summary),
+                      color = MaterialTheme.colorScheme.outline,
+                    )
+                  },
+                )
+              }
+
+              PreferenceDivider()
+
               val debanding by preferences.debanding.collectAsState()
               ListPreference(
                 value = debanding,
@@ -313,62 +405,4 @@ object DecoderPreferencesScreen : Screen {
       }
     }
   }
-}
-
-object VulkanUtils {
-    private const val TAG = "VulkanUtils"
-
-    /**
-     * Checks if the device supports Vulkan for MPV rendering
-     *
-     * Requirements for MPV androidvk context:
-     * - Android 13 (API 33) minimum for Vulkan 1.3
-     * - Vulkan 1.3 (0x00403000) hardware version
-     * - GPU must also support OpenGL ES 3.1 or higher
-     *
-     * @return true if Vulkan 1.3+ is supported for MPV, false otherwise
-     */
-    fun isVulkanSupported(context: Context): Boolean {
-        try {
-            // Vulkan 1.3 requires Android 13 (API 33) minimum
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-                Log.d(TAG, "Vulkan not supported: Android version ${Build.VERSION.SDK_INT} < 33 (Tiramisu)")
-                return false
-            }
-
-            val packageManager = context.packageManager
-
-            // Check for OpenGL ES 3.1+ support (required by Android for Vulkan)
-            val configInfo = packageManager.systemAvailableFeatures
-                .firstOrNull { it.name == null }
-
-            val glesVersion = configInfo?.reqGlEsVersion ?: 0
-            val glesMajor = glesVersion shr 16
-            val glesMinor = glesVersion and 0xFFFF
-
-            Log.d(TAG, "Device OpenGL ES version: $glesMajor.$glesMinor (raw: 0x${glesVersion.toString(16)})")
-
-            // OpenGL ES 3.1 = 0x00030001
-            if (glesVersion < 0x00030001) {
-                Log.d(TAG, "Vulkan not supported: OpenGL ES $glesMajor.$glesMinor < 3.1")
-                return false
-            }
-
-            // Check for Vulkan 1.3 hardware version (required for proper MPV support)
-            if (packageManager.hasSystemFeature(
-                    PackageManager.FEATURE_VULKAN_HARDWARE_VERSION,
-                    0x00403000 // Vulkan 1.3
-                )) {
-                Log.d(TAG, "Vulkan 1.3 supported ✓")
-                return true
-            }
-
-            Log.d(TAG, "Vulkan not supported: Vulkan 1.3 not available")
-            return false
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Error checking Vulkan support", e)
-            return false
-        }
-    }
 }

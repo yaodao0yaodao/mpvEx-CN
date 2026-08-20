@@ -30,7 +30,8 @@ class Anime4KManager(private val context: Context) {
     C(app.marlboroadvance.mpvex.R.string.anime4k_mode_c),
     A_PLUS(app.marlboroadvance.mpvex.R.string.anime4k_mode_a_plus),
     B_PLUS(app.marlboroadvance.mpvex.R.string.anime4k_mode_b_plus),
-    C_PLUS(app.marlboroadvance.mpvex.R.string.anime4k_mode_c_plus)
+    C_PLUS(app.marlboroadvance.mpvex.R.string.anime4k_mode_c_plus),
+    ARTCNN(app.marlboroadvance.mpvex.R.string.anime4k_mode_artcnn),
   }
 
   private var shaderDir: File? = null
@@ -159,6 +160,9 @@ class Anime4KManager(private val context: Context) {
         shaders.add(getShaderPath("Anime4K_AutoDownscalePre_x2.glsl"))
         shaders.add(getShaderPath("Anime4K_Restore_CNN_$q.glsl"))
         shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$q.glsl"))
+      }
+      Mode.ARTCNN -> {
+        shaders.add(getShaderPath("Ani4Kv2_ArtCNN_C4F32_i2_CMP.glsl"))
       }
       Mode.OFF -> {
         // Already handled

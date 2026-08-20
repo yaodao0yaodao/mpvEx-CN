@@ -12,6 +12,7 @@ import app.marlboroadvance.mpvex.preferences.DecoderPreferences
 import app.marlboroadvance.mpvex.preferences.PlayerPreferences
 import app.marlboroadvance.mpvex.preferences.SubtitlesPreferences
 import app.marlboroadvance.mpvex.domain.anime4k.Anime4KManager
+import app.marlboroadvance.mpvex.domain.hdr.HdrToysManager
 import app.marlboroadvance.mpvex.ui.player.PlayerActivity.Companion.TAG
 import app.marlboroadvance.mpvex.ui.player.controls.components.panels.toColorHexString
 import `is`.xyz.mpv.BaseMPVView
@@ -32,6 +33,7 @@ class MPVView(
   private val advancedPreferences: AdvancedPreferences by inject()
   private val subtitlesPreferences: SubtitlesPreferences by inject()
   private val anime4kManager: Anime4KManager by inject()
+  private val hdrToysManager: HdrToysManager by inject()
 
   var isExiting = false
 
@@ -97,12 +99,34 @@ class MPVView(
   override fun initOptions() {
     val profile = decoderPreferences.profile.get()
     MPVLib.setOptionString("profile", profile)
-    setVo(if (decoderPreferences.gpuNext.get()) "gpu-next" else "gpu")
-    
-    // Set GPU API context (Vulkan or OpenGL)
-    if (decoderPreferences.useVulkan.get()) {
-      MPVLib.setOptionString("gpu-context", "androidvk")
-    }
+    val requestedHdrMode = selectedHdrMode()
+    val anime4kActive =
+      decoderPreferences.enableAnime4K.get() && decoderPreferences.anime4kMode.get() != "OFF"
+    val backend =
+      selectRendererBackend(
+        gpuNextEnabled = decoderPreferences.gpuNext.get(),
+        vulkanEnabled = decoderPreferences.useVulkan.get(),
+        vulkanSupported = VulkanCapabilities.isDeviceSupported(context),
+        anime4kActive = anime4kActive,
+        hdrActive = requestedHdrMode != HdrScreenMode.OFF,
+      )
+    setVo(backend.videoOutput)
+    MPVLib.setOptionString("gpu-api", backend.gpuApi)
+    MPVLib.setOptionString("gpu-context", backend.gpuContext)
+
+    val hdrMode = resolveHdrMode(requestedHdrMode, backend)
+    val hdrShaderPaths = hdrMode.hdrToysProfile?.let(hdrToysManager::getShaderPaths).orEmpty()
+    val hdrPipelineReady =
+      when {
+        hdrMode == HdrScreenMode.OFF -> true
+        hdrMode == HdrScreenMode.LINEAR -> backend.videoOutput == "gpu-next" && backend.gpuApi == "vulkan"
+        else -> hdrShaderPaths.size == hdrMode.hdrToysProfile?.shaderPaths?.size
+      }
+    applyHdrScreenOutputOptions(
+      mode = hdrMode,
+      pipelineReady = hdrPipelineReady,
+      boostSdrToHdr = decoderPreferences.boostSdrToHdr.get(),
+    )
 
     // Set hwdec with fallback order: HW+ (mediacodec) -> HW (mediacodec-copy) -> SW (no)
     MPVLib.setOptionString(
@@ -149,8 +173,8 @@ class MPVView(
     MPVLib.setOptionString("hr-seek", if (preciseSeek) "yes" else "no")
     MPVLib.setOptionString("hr-seek-framedrop", if (preciseSeek) "no" else "yes")
 
-    // Anime4K shader initialization (MUST be in initOptions, not after file load!)
-    applyAnime4KShaders()
+    // Anime4K runs first; hdr-toys performs the final color transform.
+    applyShaderStack(backend, hdrShaderPaths)
 
     setupSubtitlesOptions()
     setupAudioOptions()
@@ -359,62 +383,66 @@ class MPVView(
 
 
   fun applyAnime4KShaders() {
-    runCatching {
-      val enabled = decoderPreferences.enableAnime4K.get()
-      if (!enabled) {
-        return
-      }
-      
-      // Anime4K requires the legacy GPU path unless gpu-next is running on Vulkan.
-      val gpuNextActive = decoderPreferences.gpuNext.get()
-      val useVulkan = decoderPreferences.useVulkan.get()
-      if (gpuNextActive && !useVulkan) {
-        return  // Abort shader loading to prevent incompatible state
-      }
-      
-      // Initialize shader files if needed - THIS IS CRITICAL!
-      if (!anime4kManager.initialize()) {
-        return
-      }
-      
-      // Get preferences
-      val modeStr = decoderPreferences.anime4kMode.get()
-      
-      // Check if mode is OFF - if so, don't apply any shaders
-      if (modeStr == "OFF") {
-        return  // Exit early - user wants it OFF
-      }
-      
-      // Parse user's selected mode
-      val mode = try {
-          Anime4KManager.Mode.valueOf(modeStr)
-      } catch (e: IllegalArgumentException) {
-          Anime4KManager.Mode.OFF
-      }
-      
-      val qualityStr = decoderPreferences.anime4kQuality.get()
-      val quality = try {
-        Anime4KManager.Quality.valueOf(qualityStr)
-      } catch (e: IllegalArgumentException) {
-        Anime4KManager.Quality.BALANCED
-      }
-      
-      // Get shader chain from manager
-      val shaderChain = anime4kManager.getShaderChain(mode, quality)
-      
-      if (shaderChain.isNotEmpty()) {
-        // OpenGL-only tuning should not be pushed onto the Vulkan backend.
-        if (!useVulkan) {
-          MPVLib.setOptionString("opengl-pbo", "yes")
-          MPVLib.setOptionString("opengl-early-flush", "no")
-        }
-        MPVLib.setOptionString("vd-lavc-dr", "yes")
-        
-        // Apply shaders (MUST use setOptionString in initOptions!)
-        MPVLib.setOptionString("glsl-shaders", shaderChain)
-      }
-    }.onFailure {
-      // Don't crash - just continue without shaders
+    val requestedHdrMode = selectedHdrMode()
+    val backend =
+      selectRendererBackend(
+        gpuNextEnabled = decoderPreferences.gpuNext.get(),
+        vulkanEnabled = decoderPreferences.useVulkan.get(),
+        vulkanSupported = VulkanCapabilities.isDeviceSupported(context),
+        anime4kActive = decoderPreferences.enableAnime4K.get() && decoderPreferences.anime4kMode.get() != "OFF",
+        hdrActive = requestedHdrMode != HdrScreenMode.OFF,
+      )
+    val hdrMode = resolveHdrMode(requestedHdrMode, backend)
+    val hdrShaderPaths = hdrMode.hdrToysProfile?.let(hdrToysManager::getShaderPaths).orEmpty()
+    applyShaderStack(backend, hdrShaderPaths)
+  }
+
+  private fun selectedHdrMode(): HdrScreenMode =
+    if (decoderPreferences.hdrScreenOutput.get()) {
+      decoderPreferences.hdrScreenMode.get()
+    } else {
+      HdrScreenMode.OFF
     }
+
+  private fun resolveHdrMode(requestedMode: HdrScreenMode, backend: RendererBackend): HdrScreenMode =
+    if (requestedMode == HdrScreenMode.LINEAR &&
+      (backend.videoOutput != "gpu-next" || backend.gpuApi != "vulkan")
+    ) {
+      HdrScreenMode.defaultEnabledMode
+    } else {
+      requestedMode
+    }
+
+  private fun applyShaderStack(backend: RendererBackend, hdrShaderPaths: List<String>) {
+    runCatching {
+      val animeShaderPaths = anime4kShaderPaths(backend)
+      val combined = animeShaderPaths + hdrShaderPaths
+      if (combined.isNotEmpty()) {
+        MPVLib.setOptionString("glsl-shaders", combined.joinToString(":"))
+      }
+    }
+  }
+
+  private fun anime4kShaderPaths(backend: RendererBackend): List<String> {
+    if (!decoderPreferences.enableAnime4K.get()) return emptyList()
+    if (backend.videoOutput == "gpu-next" && backend.gpuApi != "vulkan") return emptyList()
+    if (!anime4kManager.initialize()) return emptyList()
+
+    val mode =
+      runCatching { Anime4KManager.Mode.valueOf(decoderPreferences.anime4kMode.get()) }
+        .getOrDefault(Anime4KManager.Mode.OFF)
+    if (mode == Anime4KManager.Mode.OFF) return emptyList()
+    val quality =
+      runCatching { Anime4KManager.Quality.valueOf(decoderPreferences.anime4kQuality.get()) }
+        .getOrDefault(Anime4KManager.Quality.BALANCED)
+    val shaderChain = anime4kManager.getShaderChain(mode, quality)
+    if (shaderChain.isEmpty()) return emptyList()
+
+    if (backend.gpuApi == "opengl") {
+      MPVLib.setOptionString("opengl-pbo", "yes")
+      MPVLib.setOptionString("opengl-early-flush", "no")
+    }
+    MPVLib.setOptionString("vd-lavc-dr", "yes")
+    return shaderChain.split(":")
   }
 }
