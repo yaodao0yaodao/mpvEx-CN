@@ -10,7 +10,7 @@ ArtCNN、SDR→HDR 增强、智能渲染后端及部分播放性能保护的设�
 
 - **汉化日期：** 2026-08-19
 - **汉化时版本：** v1.2.9
-- **当前中文版版本：** v1.3.2-test.1（测试版）
+- **当前中文版版本：** v1.3.2-test.2（测试版）
 - **独立包名：** `io.github.yaodao0yaodao.mpvex`，可与上游版本同时安装
 - **构建架构：** 仅提供 `arm64-v8a`
 - **附加改动：** 解码器优先级与临时切换；硬件解码增强兼容模式；画面比例永久保存；字幕轨标题智能选择；音量调节优化；可靠缩略图；Anime4K/ArtCNN；SDR→HDR 增强；智能渲染与播放保护；无首帧和声音泄漏的历史进度续播；应用内更新指向本项目 Releases
@@ -92,7 +92,7 @@ the [upstream Issues](https://github.com/marlboro-advance/mpvEx/issues) section.
 
 > 本项目使用独立包名和签名，不能覆盖安装上游版本；两者可以共存。
 
-> `v1.3.2-test.1` 是解码器切换重构测试版，请在 [Releases](https://github.com/yaodao0yaodao/mpvEx-CN/releases) 页面手动选择；GitHub 的“最新稳定版”仍指向 v1.3.1。
+> `v1.3.2-test.2` 是解码器切换重构测试版，修复了切换解码器时过早销毁 GPU/硬件合成资源导致的原生层闪退。请在 [Releases](https://github.com/yaodao0yaodao/mpvEx-CN/releases) 页面手动选择；GitHub 的“最新稳定版”仍指向 v1.3.1。
 
 ---
 

@@ -53,7 +53,9 @@ class PlayerObserver(
   }
 
   override fun event(eventId: Int, data: MPVNode) {
-    if (activity.player.isExiting) return
+    // Decoder switching deliberately keeps this observer registered until mpv
+    // confirms that its renderer and decoder threads have shut down.
+    if (activity.player.isExiting && eventId != MPVLib.MpvEvent.MPV_EVENT_SHUTDOWN) return
     activity.runOnUiThread { activity.event(eventId) }
   }
 }
