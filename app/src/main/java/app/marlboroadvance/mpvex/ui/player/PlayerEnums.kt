@@ -50,7 +50,6 @@ enum class Decoder(
   @StringRes val titleRes: Int,
   val value: String,
 ) {
-  AutoCopy(R.string.player_decoder_auto_copy, "auto-copy"),
   Auto(R.string.player_decoder_auto, "auto"),
   SW(R.string.player_decoder_software, "no"),
   HW(R.string.player_decoder_hardware, "mediacodec-copy"),
@@ -58,7 +57,9 @@ enum class Decoder(
   ;
 
   companion object {
-    fun getDecoderFromValue(value: String): Decoder = Decoder.entries.first { it.value == value }
+    val priorityModes = listOf(HWPlus, HW, SW)
+
+    fun getDecoderFromValue(value: String): Decoder = Decoder.entries.firstOrNull { it.value == value } ?: Auto
   }
 }
 
@@ -77,7 +78,6 @@ enum class MPVProfile(
   Fast(R.string.mpv_profile_fast, "fast"),
   Default(R.string.mpv_profile_default, "default"),
   HighQuality(R.string.mpv_profile_high_quality, "high-quality"),
-  GpuHQ(R.string.mpv_profile_gpu_hq, "gpu-hq"),
   LowLatency(R.string.mpv_profile_low_latency, "low-latency"),
   SwFast(R.string.mpv_profile_sw_fast, "sw-fast"),
   ;

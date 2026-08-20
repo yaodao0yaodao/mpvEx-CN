@@ -234,12 +234,14 @@ fun PlayerSheets(
     }
 
     Sheets.More -> {
+      val hardwarePlusMode by viewModel.hardwarePlusMode.collectAsState()
       MoreSheet(
         remainingTime = sleepTimerTimeRemaining,
         onStartTimer = onStartSleepTimer,
         onDismissRequest = onDismissRequest,
         onEnterFiltersPanel = { onOpenPanel(Panels.VideoFilters) },
         onAnime4KChanged = { playerActivity?.player?.applyAnime4KShaders() },
+        hardwarePlusMode = hardwarePlusMode,
       )
     }
 

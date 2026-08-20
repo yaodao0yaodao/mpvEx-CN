@@ -65,6 +65,7 @@ fun MoreSheet(
   onDismissRequest: () -> Unit,
   onEnterFiltersPanel: () -> Unit,
   onAnime4KChanged: () -> Unit = {},
+  hardwarePlusMode: Boolean = false,
   modifier: Modifier = Modifier,
 ) {
   val advancedPreferences = koinInject<AdvancedPreferences>()
@@ -182,7 +183,18 @@ fun MoreSheet(
       }
       
       // Shaders Controls
-      if (enableAnime4K && (!gpuNext || useVulkan)) {
+      if (hardwarePlusMode) {
+        Text(
+          text = stringResource(R.string.anime4k_mode_title),
+          style = MaterialTheme.typography.titleMedium,
+          color = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+          text = stringResource(R.string.player_hwplus_anime4k_unavailable),
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.error,
+        )
+      } else if (enableAnime4K && (!gpuNext || useVulkan)) {
         // Auto-detect resolution to disable for 4K+
         val width = MPVLib.getPropertyInt("video-params/w") ?: 0
         val height = MPVLib.getPropertyInt("video-params/h") ?: 0

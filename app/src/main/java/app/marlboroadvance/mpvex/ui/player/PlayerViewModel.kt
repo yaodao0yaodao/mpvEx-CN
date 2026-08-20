@@ -183,7 +183,15 @@ class PlayerViewModel(
 
   private val _videoDynamicRange = MutableStateFlow(VideoDynamicRange.UNKNOWN)
   val videoDynamicRange: StateFlow<VideoDynamicRange> = _videoDynamicRange.asStateFlow()
+  private val _videoHdrType = MutableStateFlow(VideoHdrType.UNKNOWN)
+  val videoHdrType: StateFlow<VideoHdrType> = _videoHdrType.asStateFlow()
   val hdrPipelineAvailable = VulkanCapabilities.isDeviceSupported(host.context)
+  private val _hardwarePlusMode =
+    MutableStateFlow(host.activeDecoder == Decoder.HWPlus)
+  val hardwarePlusMode: StateFlow<Boolean> = _hardwarePlusMode.asStateFlow()
+  private val _selectedDecoder =
+    MutableStateFlow(host.activeDecoder)
+  val selectedDecoder: StateFlow<Decoder> = _selectedDecoder.asStateFlow()
   private val _sdrHdrBoostEnabled = MutableStateFlow(decoderPreferences.boostSdrToHdr.get())
   val sdrHdrBoostEnabled: StateFlow<Boolean> = _sdrHdrBoostEnabled.asStateFlow()
   private var appliedSdrHdrBoost = false
@@ -1919,27 +1927,56 @@ class PlayerViewModel(
     Toast.makeText(host.context, message, Toast.LENGTH_SHORT).show()
   }
 
-  fun onVideoLoaded(dynamicRange: VideoDynamicRange) {
+  fun onVideoLoaded(hdrType: VideoHdrType) {
     _sdrHdrBoostEnabled.value = decoderPreferences.boostSdrToHdr.get()
+    _videoHdrType.value = hdrType
+    val dynamicRange = hdrType.dynamicRange
     if (dynamicRange == VideoDynamicRange.UNKNOWN) {
       _videoDynamicRange.value = VideoDynamicRange.UNKNOWN
       applySdrHdrBoostIfChanged(false)
       return
     }
-    updateVideoDynamicRange(dynamicRange, forceApply = true)
+    updateVideoHdrType(hdrType, forceApply = true)
   }
 
-  fun updateVideoDynamicRange(
-    dynamicRange: VideoDynamicRange,
+  fun updateVideoHdrType(
+    hdrType: VideoHdrType,
     forceApply: Boolean = false,
   ) {
+    val dynamicRange = hdrType.dynamicRange
     if (dynamicRange == VideoDynamicRange.UNKNOWN) return
-    if (!forceApply && dynamicRange == _videoDynamicRange.value) return
+    if (!forceApply && hdrType == _videoHdrType.value) return
+    _videoHdrType.value = hdrType
     _videoDynamicRange.value = dynamicRange
-    applySdrHdrBoostIfChanged(dynamicRange == VideoDynamicRange.SDR && _sdrHdrBoostEnabled.value)
+    applySdrHdrBoostIfChanged(
+      !hardwarePlusMode.value && dynamicRange == VideoDynamicRange.SDR && _sdrHdrBoostEnabled.value,
+    )
+  }
+
+  fun selectDecoder(decoder: Decoder) {
+    val hardwarePlus = decoder == Decoder.HWPlus
+    _selectedDecoder.value = decoder
+    _hardwarePlusMode.value = hardwarePlus
+    appliedSdrHdrBoost = false
+    host.switchDecoder(decoder)
+    if (!hardwarePlus) {
+      updateVideoHdrType(videoHdrType.value, forceApply = true)
+    }
   }
 
   fun toggleHdrPlayback() {
+    if (hardwarePlusMode.value) {
+      val message =
+        when (videoHdrType.value) {
+          VideoHdrType.PQ -> host.context.getString(R.string.player_hwplus_hdr_pq)
+          VideoHdrType.HLG -> host.context.getString(R.string.player_hwplus_hdr_hlg)
+          VideoHdrType.BT2020 -> host.context.getString(R.string.player_hwplus_hdr_bt2020)
+          VideoHdrType.SDR -> host.context.getString(R.string.player_hwplus_sdr_hdr_unavailable)
+          VideoHdrType.UNKNOWN -> host.context.getString(R.string.player_hwplus_hdr_identifying)
+        }
+      playerUpdate.value = PlayerUpdates.ShowText(message)
+      return
+    }
     if (!hdrPipelineAvailable) {
       playerUpdate.value = PlayerUpdates.ShowText("此设备不支持线性 HDR")
       return

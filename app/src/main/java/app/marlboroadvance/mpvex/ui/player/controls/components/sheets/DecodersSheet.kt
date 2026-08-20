@@ -13,7 +13,7 @@ fun DecodersSheet(
   onDismissRequest: () -> Unit,
 ) {
   GenericTracksSheet(
-    Decoder.entries.minusElement(Decoder.Auto).toImmutableList(),
+    Decoder.priorityModes.toImmutableList(),
     track = {
       AudioTrackRow(
         title = stringResource(R.string.player_sheets_decoder_formatted, stringResource(it.titleRes), it.value),

@@ -327,9 +327,15 @@ fun RenderPlayerButton(
     PlayerButton.HDR_MODE -> {
       val dynamicRange by viewModel.videoDynamicRange.collectAsState()
       val sdrBoostEnabled by viewModel.sdrHdrBoostEnabled.collectAsState()
-      val active = viewModel.hdrPipelineAvailable &&
-        (dynamicRange == VideoDynamicRange.HDR ||
-          (dynamicRange == VideoDynamicRange.SDR && sdrBoostEnabled))
+      val hardwarePlusMode by viewModel.hardwarePlusMode.collectAsState()
+      val active =
+        if (hardwarePlusMode) {
+          dynamicRange == VideoDynamicRange.HDR
+        } else {
+          viewModel.hdrPipelineAvailable &&
+            (dynamicRange == VideoDynamicRange.HDR ||
+              (dynamicRange == VideoDynamicRange.SDR && sdrBoostEnabled))
+        }
       ControlsButton(
         icon = if (active) Icons.Default.HdrOn else Icons.Default.HdrOff,
         onClick = viewModel::toggleHdrPlayback,

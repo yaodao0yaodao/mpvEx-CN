@@ -6,10 +6,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -27,6 +31,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -38,6 +43,7 @@ import app.marlboroadvance.mpvex.preferences.DecoderPreferences
 import app.marlboroadvance.mpvex.preferences.preference.collectAsState
 import app.marlboroadvance.mpvex.presentation.Screen
 import app.marlboroadvance.mpvex.ui.player.Debanding
+import app.marlboroadvance.mpvex.ui.player.Decoder
 import app.marlboroadvance.mpvex.ui.player.MPVProfile
 import app.marlboroadvance.mpvex.ui.player.VulkanCapabilities
 import app.marlboroadvance.mpvex.ui.utils.LocalBackStack
@@ -57,6 +63,7 @@ object DecoderPreferencesScreen : Screen {
     val context = LocalContext.current
     val isVulkanSupported = remember { VulkanCapabilities.isDeviceSupported(context) }
     var showGpuNextWarning by remember { mutableStateOf(false) }
+    var showDecoderPriorityDialog by remember { mutableStateOf(false) }
     Scaffold(
       topBar = {
         TopAppBar(
@@ -111,14 +118,21 @@ object DecoderPreferencesScreen : Screen {
 
               PreferenceDivider()
 
-              val tryHWDecoding by preferences.tryHWDecoding.collectAsState()
-              SwitchPreference(
-                value = tryHWDecoding,
-                onValueChange = {
-                  preferences.tryHWDecoding.set(it)
-                },
-                title = { Text(stringResource(R.string.pref_decoder_try_hw_dec_title)) },
-              )
+              val decoderPriority by preferences.decoderPriority.collectAsState()
+              Column(
+                modifier =
+                  Modifier
+                    .fillMaxWidth()
+                    .clickable { showDecoderPriorityDialog = true }
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+              ) {
+                Text(stringResource(R.string.pref_decoder_priority_title), style = MaterialTheme.typography.bodyLarge)
+                Text(
+                  decoderPriority.joinToString(" → ") { context.getString(it.titleRes) },
+                  color = MaterialTheme.colorScheme.outline,
+                  style = MaterialTheme.typography.bodyMedium,
+                )
+              }
 
               PreferenceDivider()
 
@@ -307,6 +321,63 @@ object DecoderPreferencesScreen : Screen {
           }
         }
       }
+    }
+
+    if (showDecoderPriorityDialog) {
+      val priority by preferences.decoderPriority.collectAsState()
+      AlertDialog(
+        onDismissRequest = { showDecoderPriorityDialog = false },
+        title = { Text(stringResource(R.string.pref_decoder_priority_title)) },
+        text = {
+          Column {
+            Text(
+              stringResource(R.string.pref_decoder_priority_summary),
+              style = MaterialTheme.typography.bodyMedium,
+              color = MaterialTheme.colorScheme.outline,
+              modifier = Modifier.padding(bottom = 8.dp),
+            )
+            priority.forEachIndexed { index, decoder ->
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                Text(
+                  text = context.getString(decoder.titleRes),
+                  style = MaterialTheme.typography.bodyLarge,
+                  modifier = Modifier.weight(1f).padding(vertical = 8.dp),
+                )
+                IconButton(
+                  onClick = {
+                    val updated = priority.toMutableList()
+                    val item = updated.removeAt(index)
+                    updated.add(index - 1, item)
+                    preferences.decoderPriority.set(updated)
+                  },
+                  enabled = index > 0,
+                ) {
+                  Icon(Icons.Default.ExpandLess, contentDescription = null)
+                }
+                IconButton(
+                  onClick = {
+                    val updated = priority.toMutableList()
+                    val item = updated.removeAt(index)
+                    updated.add(index + 1, item)
+                    preferences.decoderPriority.set(updated)
+                  },
+                  enabled = index < priority.lastIndex,
+                ) {
+                  Icon(Icons.Default.ExpandMore, contentDescription = null)
+                }
+              }
+            }
+          }
+        },
+        confirmButton = {
+          TextButton(onClick = { showDecoderPriorityDialog = false }) {
+            Text(stringResource(R.string.generic_ok))
+          }
+        },
+      )
     }
   }
 }

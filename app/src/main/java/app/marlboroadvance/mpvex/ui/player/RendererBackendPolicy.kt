@@ -6,13 +6,32 @@ data class RendererBackend(
   val gpuContext: String,
 )
 
+internal fun initialHwdecValue(
+  selectedDecoder: Decoder?,
+  decoderPriority: List<Decoder>,
+): String =
+  selectedDecoder?.value ?: decoderPriorityHwdecValue(decoderPriority)
+
+internal fun decoderPriorityHwdecValue(priority: List<Decoder>): String {
+  val normalized = (priority + Decoder.priorityModes).distinct().filter { it in Decoder.priorityModes }
+  val enabled = normalized.takeWhile { it != Decoder.SW }
+  return if (enabled.isEmpty()) Decoder.SW.value else (enabled.map(Decoder::value) + Decoder.SW.value).joinToString(",")
+}
+
 internal fun selectRendererBackend(
   gpuNextEnabled: Boolean,
   vulkanEnabled: Boolean,
   vulkanSupported: Boolean,
   anime4kActive: Boolean,
   hdrActive: Boolean,
+  hardwarePlusMode: Boolean = false,
 ): RendererBackend {
+  // HW+ keeps gpu-next when requested, but uses the OpenGL path because Vulkan,
+  // linear HDR and Anime4K are suspended for this playback mode.
+  if (hardwarePlusMode) {
+    return RendererBackend(if (gpuNextEnabled) "gpu-next" else "gpu", "opengl", "android")
+  }
+
   val useVulkan = vulkanSupported && (vulkanEnabled || hdrActive)
   val useGpuNext = gpuNextEnabled || hdrActive
 

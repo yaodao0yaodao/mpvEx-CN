@@ -94,6 +94,8 @@ internal fun buildLoadFileCommand(
 class PlayerActivity :
   AppCompatActivity(),
   PlayerHost {
+  override val activeDecoder: Decoder
+    get() = player.activeDecoder
   // ==================== ViewModels and Bindings ====================
 
   /**
@@ -243,6 +245,7 @@ class PlayerActivity :
   private var mpvInitialized = false // Track MPV initialization state
   private var savePlaybackStateJob: kotlinx.coroutines.Job? = null // Track ongoing save job
   private var wasPlayingBeforePause = false // Track if video was playing before pause
+  private var isDecoderRestarting = false
 
   // ==================== Background Playback ====================
 
@@ -351,6 +354,10 @@ class PlayerActivity :
     // OPTIMIZATION: Set volume control stream so hardware buttons control media volume
     volumeControlStream = AudioManager.STREAM_MUSIC
 
+    player.decoderOverride =
+      intent.getStringExtra(EXTRA_DECODER_OVERRIDE)?.let { value ->
+        Decoder.priorityModes.firstOrNull { it.value == value }
+      }
     setupMPV()
     startAnime4KSafetyMonitor()
     MediaPlaybackService.createNotificationChannel(this)
@@ -583,7 +590,7 @@ class PlayerActivity :
       isReady = false
 
       // Only stop the service if we're not doing manual background playback
-      if ((isUserFinishing || isFinishing) && !isManualBackgroundPlayback) {
+      if (!isDecoderRestarting && (isUserFinishing || isFinishing) && !isManualBackgroundPlayback) {
         if (serviceBound) {
           runCatching { unbindService(serviceConnection) }
           serviceBound = false
@@ -662,6 +669,50 @@ class PlayerActivity :
     }
   }
 
+  override fun switchDecoder(decoder: Decoder) {
+    if (decoder == player.activeDecoder || !mpvInitialized) return
+    lifecycleScope.launch {
+      val wasPlaying = MPVLib.getPropertyBoolean("pause") != true
+      MPVLib.setPropertyBoolean("pause", true)
+      if (fileName.isNotBlank()) {
+        saveVideoPlaybackState(fileName)
+        savePlaybackStateJob?.join()
+      }
+
+      val restartIntent = Intent(intent).apply {
+        putExtra(EXTRA_DECODER_OVERRIDE, decoder.value)
+        putExtra("playlist_index", playlistIndex)
+        if (playlistIndex in playlist.indices) {
+          action = Intent.ACTION_VIEW
+          data = playlist[playlistIndex]
+        }
+        putExtra(EXTRA_RESUME_PLAYING, wasPlaying)
+        addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
+      }
+
+      isDecoderRestarting = true
+      shutdownMPVForDecoderSwitch()
+      startActivity(restartIntent)
+      overridePendingTransition(0, 0)
+      finish()
+    }
+  }
+
+  private suspend fun shutdownMPVForDecoderSwitch() {
+    if (!mpvInitialized) return
+    isReady = false
+    player.isExiting = true
+    runCatching {
+      MPVLib.removeObserver(playerObserver)
+      MPVLib.command("quit")
+      delay(120)
+      MPVLib.destroy()
+      mpvInitialized = false
+    }.onFailure { error ->
+      Log.e(TAG, "Failed to restart MPV for decoder switch", error)
+    }
+  }
+
   private fun cleanupAudio() {
     abandonAudioFocus()
   }
@@ -677,6 +728,10 @@ class PlayerActivity :
 
   @RequiresApi(Build.VERSION_CODES.P)
   override fun onPause() {
+    if (isDecoderRestarting) {
+      super.onPause()
+      return
+    }
     runCatching {
       val isInPip = isInPictureInPictureMode
       val shouldPause = (!audioPreferences.automaticBackgroundPlayback.get() && !isManualBackgroundPlayback) || 
@@ -710,6 +765,10 @@ class PlayerActivity :
 
   @RequiresApi(Build.VERSION_CODES.P)
   override fun finish() {
+    if (isDecoderRestarting) {
+      super.finish()
+      return
+    }
     runCatching {
       // Don't restore UI during normal finish to prevent flickering
       // System will handle UI restoration automatically
@@ -750,6 +809,10 @@ class PlayerActivity :
   }
 
   override fun onStop() {
+    if (isDecoderRestarting) {
+      super.onStop()
+      return
+    }
     runCatching {
       pipHelper.onStop()
       saveVideoPlaybackState(fileName)
@@ -1590,7 +1653,7 @@ class PlayerActivity :
   ) {
     // Handle Double properties
     when (property) {
-      "video-params/sig-peak" -> viewModel.updateVideoDynamicRange(player.currentVideoDynamicRange())
+      "video-params/sig-peak" -> refreshVideoHdrState()
       "video-params/aspect" -> {
         // Safety check: don't access MPV during cleanup
         if (!mpvInitialized || player.isExiting || isFinishing) return
@@ -1624,8 +1687,8 @@ class PlayerActivity :
     property: String,
     value: String,
   ) {
-    if (property == "video-params/gamma") {
-      viewModel.updateVideoDynamicRange(player.currentVideoDynamicRange())
+    if (property == "video-params/gamma" || property == "video-params/primaries") {
+      refreshVideoHdrState()
     }
   }
 
@@ -1669,7 +1732,13 @@ class PlayerActivity :
    */
   private fun handleFileLoaded() {
     player.resetAnime4KSafety()
-    viewModel.onVideoLoaded(player.currentVideoDynamicRange())
+    val hdrType = player.currentVideoHdrType()
+    player.applyHardwarePlusHdrForSource(hdrType)
+    viewModel.onVideoLoaded(hdrType)
+    if (intent.hasExtra(EXTRA_RESUME_PLAYING)) {
+      MPVLib.setPropertyBoolean("pause", !intent.getBooleanExtra(EXTRA_RESUME_PLAYING, true))
+      intent.removeExtra(EXTRA_RESUME_PLAYING)
+    }
 
     // Extract fileName from intent only if not already set
     // This preserves fileName set in onNewIntent or onCreate
@@ -1803,6 +1872,12 @@ class PlayerActivity :
 
     // Asynchronously fetch better filename from HTTP headers for network streams
     fetchNetworkStreamTitle()
+  }
+
+  private fun refreshVideoHdrState() {
+    val hdrType = player.currentVideoHdrType()
+    player.applyHardwarePlusHdrForSource(hdrType)
+    viewModel.updateVideoHdrType(hdrType)
   }
 
   /**
@@ -3385,6 +3460,8 @@ class PlayerActivity :
 
 
   companion object {
+    private const val EXTRA_DECODER_OVERRIDE = "mpvex.decoder_override"
+    private const val EXTRA_RESUME_PLAYING = "mpvex.resume_playing"
     /**
      * Intent action used to return playback result data to the calling activity.
      */

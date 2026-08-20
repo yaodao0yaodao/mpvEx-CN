@@ -10,11 +10,11 @@ ArtCNN、SDR→HDR 增强、智能渲染后端及部分播放性能保护的设�
 
 - **汉化日期：** 2026-08-19
 - **汉化时版本：** v1.2.9
-- **当前中文版版本：** v1.3.1
+- **当前中文版版本：** v1.3.2-test.1（测试版）
 - **独立包名：** `io.github.yaodao0yaodao.mpvex`，可与上游版本同时安装
 - **构建架构：** 仅提供 `arm64-v8a`
-- **附加改动：** 画面比例永久保存；字幕轨标题智能选择；音量调节优化；可靠缩略图；Anime4K/ArtCNN；SDR→HDR 增强；智能渲染与播放保护；无首帧和声音泄漏的历史进度续播；应用内更新指向本项目 Releases
-- **上游同步：** GitHub Actions 每日自动合并上游 `master`，随后构建 ARM64 APK；检测到上游正式版本时自动发布 Release
+- **附加改动：** 解码器优先级与临时切换；硬件解码增强兼容模式；画面比例永久保存；字幕轨标题智能选择；音量调节优化；可靠缩略图；Anime4K/ArtCNN；SDR→HDR 增强；智能渲染与播放保护；无首帧和声音泄漏的历史进度续播；应用内更新指向本项目 Releases
+- **维护与构建：** 本项目已停止无验证的上游自动合并；每次推送均由 GitHub Actions 构建 ARM64 APK，上游改动会在人工检查和适配后按需引入
 
 ## 界面预览
 
@@ -46,7 +46,9 @@ mpvExtended 是基于 libmpv 的 Android 视频播放器，源自 [mpv-android](
 相较于上游 [marlboro-advance/mpvEx](https://github.com/marlboro-advance/mpvEx)，本项目主要增加或调整了：
 
 - 完整简体中文界面，以及更适合中文片源的字幕轨智能匹配和在线字幕默认语言。
-- 独立包名、ARM64 APK、项目内更新检查和每日上游同步。
+- 独立包名、ARM64 APK、项目内更新检查，以及每次推送自动构建。
+- 可排序的“解码器优先级”；播放界面可临时切换三种解码模式，退出播放后恢复设置顺序。
+- 硬件解码增强兼容模式可保留 `gpu-next`，并在播放期间暂停 Vulkan、线性 HDR 和 Anime4K；原生 HDR 仍按片源类型自动输出。
 - 画面比例永久保存、音量调节优化、缩略图可靠性改进，以及不会泄漏文件开头画面或声音的历史进度续播。
 - Anime4K、ArtCNN，以及面向高分辨率、温度和播放压力的自动保护。
 - 播放界面 SDR→HDR 增强、智能渲染后端和播放性能优化。
@@ -89,6 +91,8 @@ the [upstream Issues](https://github.com/marlboro-advance/mpvEx/issues) section.
 [![Download Release](https://img.shields.io/badge/Download-ARM64%20APK-blue?style=for-the-badge)](https://github.com/yaodao0yaodao/mpvEx-CN/releases/latest)
 
 > 本项目使用独立包名和签名，不能覆盖安装上游版本；两者可以共存。
+
+> `v1.3.2-test.1` 是解码器切换重构测试版，请在 [Releases](https://github.com/yaodao0yaodao/mpvEx-CN/releases) 页面手动选择；GitHub 的“最新稳定版”仍指向 v1.3.1。
 
 ---
 
