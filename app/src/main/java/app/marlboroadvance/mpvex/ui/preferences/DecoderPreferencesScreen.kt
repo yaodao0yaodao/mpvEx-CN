@@ -214,14 +214,29 @@ object DecoderPreferencesScreen : Screen {
                 enabled = isVulkanSupported,
                 title = { Text(stringResource(R.string.pref_decoder_vulkan_title) + " (Experimental)") },
                 summary = {
-                  Text(
-                    stringResource(
-                      if (isVulkanSupported) R.string.pref_decoder_vulkan_summary
-                      else R.string.pref_decoder_vulkan_not_supported
-                    ),
-                    color = if (isVulkanSupported) MaterialTheme.colorScheme.outline
-                           else MaterialTheme.colorScheme.error,
-                  )
+                  Column {
+                    Text(
+                      stringResource(
+                        if (isVulkanSupported) R.string.pref_decoder_vulkan_summary
+                        else R.string.pref_decoder_vulkan_not_supported
+                      ),
+                      color = if (isVulkanSupported) MaterialTheme.colorScheme.outline
+                             else MaterialTheme.colorScheme.error,
+                    )
+                    Text(
+                      text = stringResource(R.string.pref_decoder_guide_link),
+                      color = MaterialTheme.colorScheme.primary,
+                      style = MaterialTheme.typography.bodySmall,
+                      textDecoration = TextDecoration.Underline,
+                      modifier = Modifier.clickable {
+                        val intent = Intent(
+                          Intent.ACTION_VIEW,
+                          Uri.parse("https://github.com/yaodao0yaodao/mpvEx-CN/blob/master/docs/Decoder-and-Battery.zh-CN.md"),
+                        )
+                        context.startActivity(intent)
+                      },
+                    )
+                  }
                 },
               )
 

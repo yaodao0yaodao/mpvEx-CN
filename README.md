@@ -4,14 +4,14 @@
 [![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/yaodao0yaodao/mpvEx-CN.svg?logo=github&label=GitHub&cacheSeconds=3600)](https://github.com/yaodao0yaodao/mpvEx-CN/releases/latest)
 [![GitHub all releases](https://img.shields.io/github/downloads/yaodao0yaodao/mpvEx-CN/total?logo=github&cacheSeconds=3600)](https://github.com/yaodao0yaodao/mpvEx-CN/releases/latest)
 
-这是 [marlboro-advance/mpvEx](https://github.com/marlboro-advance/mpvEx) 的简体中文维护分支，播放器内的软件名称仍为 **mpvEx**。这是面向 Android 的 mpv/libmpv 开源视频播放器，提供完整简体中文界面、ARM64 APK、Anime4K 放大、字幕轨标题智能匹配等增强。
+这是面向中文用户独立维护的 Android mpv/libmpv 开源视频播放器，源自 [marlboro-advance/mpvEx](https://github.com/marlboro-advance/mpvEx)，播放器内的软件名称仍为 **mpvEx**。项目提供完整简体中文界面、ARM64 APK、Anime4K 放大、字幕轨标题智能匹配、解码与功耗中文指南等增强。
 
 - **汉化日期：** 2026-08-19
 - **汉化时版本：** v1.2.9
-- **当前中文版版本：** v1.2.9.1（前三段跟随上游版本，第四段用于中文版修复与小功能递增）
+- **当前中文版版本：** v1.2.9.2（前三段跟随上游版本，第四段用于中文版修复与小功能递增）
 - **独立包名：** `io.github.yaodao0yaodao.mpvex`，可与上游版本同时安装
 - **构建架构：** 仅提供 `arm64-v8a`
-- **附加改动：** 画面比例设置永久保存；字幕轨标题按有序关键词智能选择；音量手势与物理按键响应优化；播放列表复用可靠缩略图生成；应用内更新指向本项目 Releases
+- **附加改动：** 画面比例设置永久保存；字幕轨标题按有序关键词智能选择；音量手势与物理按键响应优化；播放列表复用可靠缩略图生成；提供 Anime4K、解码与功耗中文说明；应用内更新指向本项目 Releases
 - **上游同步：** GitHub Actions 每日自动合并上游 `master`，随后构建 ARM64 APK；检测到上游正式版本时自动发布 Release
 
 ## 项目简介
@@ -25,6 +25,7 @@ mpvExtended 是基于 libmpv 的 Android 视频播放器，源自 [mpv-android](
 - 字幕“首选语言”默认使用 `特效,Simplified,chs,CN,简,ch,zh,中`，逐级匹配字幕轨标题；完全没有标题命中时仍按语言代码回退。
 - 在线字幕搜索默认选择 Chinese。
 - Anime4K 实验性放大功能提供独立的[预设与变体中文说明](docs/Anime4K.zh-CN.md)。
+- Vulkan 设置下方提供[解码器与省电配置中文说明](docs/Decoder-and-Battery.zh-CN.md)，帮助在画质、性能和续航之间取舍。
 - MPV 配置档中的 `GPU HQ` 已由 mpv 弃用，界面明确标记为“GPU HQ（已弃用）”。
 
 ## 上游介绍
