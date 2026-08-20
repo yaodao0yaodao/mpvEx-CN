@@ -63,6 +63,16 @@ enum class RepeatMode {
   ALL       // Repeat all (playlist)
 }
 
+internal fun positionPollInterval(
+  paused: Boolean,
+  controlsVisible: Boolean,
+): Long =
+  when {
+    paused -> 1_000L
+    controlsVisible -> 100L
+    else -> 500L
+  }
+
 class PlayerViewModelProviderFactory(
   private val host: PlayerHost,
 ) : ViewModelProvider.Factory {
@@ -159,19 +169,27 @@ class PlayerViewModel(
   private val _preciseDuration = MutableStateFlow(0f)
   val preciseDuration = _preciseDuration.asStateFlow()
 
+  private val _controlsShown = MutableStateFlow(false)
+  val controlsShown: StateFlow<Boolean> = _controlsShown.asStateFlow()
+
+  private val _seekBarShown = MutableStateFlow(false)
+  val seekBarShown: StateFlow<Boolean> = _seekBarShown.asStateFlow()
+
   // Audio state
   val currentVolume = MutableStateFlow(host.audioManager.getStreamVolume(AudioManager.STREAM_MUSIC))
   private val volumeBoostCap by MPVLib.propInt["volume-max"].collectAsState(viewModelScope)
 
   init {
-    // Poll precise position only when playing
+    // Keep the seek bar smooth while it is visible, then back off JNI polling when the
+    // controls are hidden or playback is paused.
     viewModelScope.launch {
       while (isActive) {
         val time = MPVLib.getPropertyDouble("time-pos")
         if (time != null) {
           _precisePosition.value = time.toFloat()
         }
-        delay(42) // ~24fps updates
+        val intervalMs = positionPollInterval(paused == true, _controlsShown.value || _seekBarShown.value)
+        delay(intervalMs)
       }
     }
 
@@ -209,12 +227,6 @@ class PlayerViewModel(
       }.stateIn(viewModelScope, SharingStarted.Lazily, persistentListOf())
 
   // UI state
-  private val _controlsShown = MutableStateFlow(false)
-  val controlsShown: StateFlow<Boolean> = _controlsShown.asStateFlow()
-
-  private val _seekBarShown = MutableStateFlow(false)
-  val seekBarShown: StateFlow<Boolean> = _seekBarShown.asStateFlow()
-
   private val _areControlsLocked = MutableStateFlow(false)
   val areControlsLocked: StateFlow<Boolean> = _areControlsLocked.asStateFlow()
 

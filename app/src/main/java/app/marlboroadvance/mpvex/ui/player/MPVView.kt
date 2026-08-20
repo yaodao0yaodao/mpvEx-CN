@@ -3,6 +3,7 @@ package app.marlboroadvance.mpvex.ui.player
 import android.content.Context
 import android.os.Environment
 import android.util.AttributeSet
+import android.util.Log
 
 import android.view.KeyCharacterMap
 import android.view.KeyEvent
@@ -34,6 +35,8 @@ class MPVView(
   private val subtitlesPreferences: SubtitlesPreferences by inject()
   private val anime4kManager: Anime4KManager by inject()
   private val hdrToysManager: HdrToysManager by inject()
+  private val anime4kSafetyController = Anime4KSafetyController()
+  private val framePressureTracker = FramePressureTracker()
 
   var isExiting = false
 
@@ -174,7 +177,7 @@ class MPVView(
     MPVLib.setOptionString("hr-seek-framedrop", if (preciseSeek) "no" else "yes")
 
     // Anime4K runs first; hdr-toys performs the final color transform.
-    applyShaderStack(backend, hdrShaderPaths)
+    applyShaderStack(backend, hdrShaderPaths, runtime = false)
 
     setupSubtitlesOptions()
     setupAudioOptions()
@@ -394,7 +397,45 @@ class MPVView(
       )
     val hdrMode = resolveHdrMode(requestedHdrMode, backend)
     val hdrShaderPaths = hdrMode.hdrToysProfile?.let(hdrToysManager::getShaderPaths).orEmpty()
-    applyShaderStack(backend, hdrShaderPaths)
+    applyShaderStack(backend, hdrShaderPaths, runtime = true)
+  }
+
+  fun resetAnime4KSafety() {
+    anime4kSafetyController.reset()
+    framePressureTracker.reset()
+  }
+
+  fun isAnime4KConfigured(): Boolean =
+    decoderPreferences.enableAnime4K.get() && decoderPreferences.anime4kMode.get() != Anime4KManager.Mode.OFF.name
+
+  fun refreshAnime4KSafety(thermalPressure: ThermalPressure) {
+    if (!isAnime4KConfigured()) return
+    val highResolution = isCurrentVideoHighResolution()
+    val previousLevel = anime4kSafetyController.level
+    val preferredSelection = preferredAnime4KSelection()
+    val previousSelection =
+      effectiveAnime4KSelection(
+        preferredSelection,
+        if (highResolution) Anime4KGuardLevel.DISABLED else previousLevel,
+      )
+    val framePressure = framePressureTracker.sample(readFrameCounters())
+    val currentLevel =
+      anime4kSafetyController.update(
+        highResolution = highResolution,
+        thermalPressure = thermalPressure,
+        framePressure = framePressure,
+      )
+    if (currentLevel != previousLevel) {
+      Log.i(TAG, "Anime4K safety level changed: $previousLevel -> $currentLevel")
+    }
+    val currentSelection =
+      effectiveAnime4KSelection(
+        preferredSelection,
+        if (highResolution) Anime4KGuardLevel.DISABLED else currentLevel,
+      )
+    if (currentSelection != previousSelection) {
+      applyAnime4KShaders()
+    }
   }
 
   private fun selectedHdrMode(): HdrScreenMode =
@@ -413,11 +454,17 @@ class MPVView(
       requestedMode
     }
 
-  private fun applyShaderStack(backend: RendererBackend, hdrShaderPaths: List<String>) {
+  private fun applyShaderStack(
+    backend: RendererBackend,
+    hdrShaderPaths: List<String>,
+    runtime: Boolean,
+  ) {
     runCatching {
       val animeShaderPaths = anime4kShaderPaths(backend)
       val combined = animeShaderPaths + hdrShaderPaths
-      if (combined.isNotEmpty()) {
+      if (runtime) {
+        MPVLib.setPropertyString("glsl-shaders", combined.joinToString(":"))
+      } else if (combined.isNotEmpty()) {
         MPVLib.setOptionString("glsl-shaders", combined.joinToString(":"))
       }
     }
@@ -428,14 +475,11 @@ class MPVView(
     if (backend.videoOutput == "gpu-next" && backend.gpuApi != "vulkan") return emptyList()
     if (!anime4kManager.initialize()) return emptyList()
 
-    val mode =
-      runCatching { Anime4KManager.Mode.valueOf(decoderPreferences.anime4kMode.get()) }
-        .getOrDefault(Anime4KManager.Mode.OFF)
-    if (mode == Anime4KManager.Mode.OFF) return emptyList()
-    val quality =
-      runCatching { Anime4KManager.Quality.valueOf(decoderPreferences.anime4kQuality.get()) }
-        .getOrDefault(Anime4KManager.Quality.BALANCED)
-    val shaderChain = anime4kManager.getShaderChain(mode, quality)
+    val guardLevel =
+      if (isCurrentVideoHighResolution()) Anime4KGuardLevel.DISABLED else anime4kSafetyController.level
+    val selection = effectiveAnime4KSelection(preferredAnime4KSelection(), guardLevel)
+    if (selection.mode == Anime4KManager.Mode.OFF) return emptyList()
+    val shaderChain = anime4kManager.getShaderChain(selection.mode, selection.quality)
     if (shaderChain.isEmpty()) return emptyList()
 
     if (backend.gpuApi == "opengl") {
@@ -445,4 +489,28 @@ class MPVView(
     MPVLib.setOptionString("vd-lavc-dr", "yes")
     return shaderChain.split(":")
   }
+
+  private fun preferredAnime4KSelection(): Anime4KSelection =
+    Anime4KSelection(
+      mode =
+        runCatching { Anime4KManager.Mode.valueOf(decoderPreferences.anime4kMode.get()) }
+          .getOrDefault(Anime4KManager.Mode.OFF),
+      quality =
+        runCatching { Anime4KManager.Quality.valueOf(decoderPreferences.anime4kQuality.get()) }
+          .getOrDefault(Anime4KManager.Quality.BALANCED),
+    )
+
+  private fun isCurrentVideoHighResolution(): Boolean =
+    isAnime4KHighResolution(
+      width = MPVLib.getPropertyInt("video-params/w") ?: 0,
+      height = MPVLib.getPropertyInt("video-params/h") ?: 0,
+    )
+
+  private fun readFrameCounters(): FrameCounters =
+    FrameCounters(
+      dropped = MPVLib.getPropertyInt("drop-frame-count") ?: 0,
+      delayed = MPVLib.getPropertyInt("vo-delayed-frame-count") ?: 0,
+      mistimed = MPVLib.getPropertyInt("mistimed-frame-count") ?: 0,
+      averageDelayMs = MPVLib.getPropertyDouble("vo-delayed-frame-average-ms") ?: 0.0,
+    )
 }

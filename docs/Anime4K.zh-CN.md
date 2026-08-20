@@ -19,7 +19,7 @@ Anime4K 可以在播放动漫时实时放大画面，并对线条、噪点和压
 3. 开始播放视频。
 4. 打开播放器的“更多选项”，选择 Anime4K 的“预设”和“变体”。
 
-4K 及更高分辨率的视频不会提供播放器内的预设和变体选项，因为这类视频本身已经很清晰，继续放大通常只会大幅增加 GPU 压力。
+4K 及更高分辨率的视频不会加载 Anime4K/ArtCNN，播放器内的预设和变体选项也会停用。这类视频本身已经很清晰，继续放大通常只会大幅增加 GPU 压力。
 
 如果使用 `gpu-next`，需要同时开启 Vulkan；`gpu-next` 与 Vulkan 没有同时启用时，应用不会加载 Anime4K 着色器。
 
@@ -56,6 +56,17 @@ Anime4K 可以在播放动漫时实时放大画面，并对线条、噪点和压
 
 “高质量”不一定看起来最好。手机屏幕较小，画质差别可能并不明显，但耗电、发热和掉帧会更容易察觉。
 
+## 自动播放保护
+
+播放期间，播放器会低频读取 Android 的温控状态，并观察最近一段时间新增的掉帧、延迟帧和渲染延迟。保护只改变当前播放实际加载的着色器，不会修改你保存的预设：
+
+- 普通 Anime4K 遇到温控或帧压力时，会先改用较轻的普通预设和“快速”变体；压力继续增大时临时关闭。
+- ArtCNN 是独立固定模型，不会被替换成 A、B、C 等普通 Anime4K。它只有继续启用或临时关闭两种状态。
+- 状态恢复后，播放器会等待连续多次正常采样，再逐步恢复用户原先选择，避免着色器频繁开关。
+- 4K/8K 属于硬性安全保护，不受临时恢复逻辑影响。
+
+这一保护方案参考了 [mpvRx](https://github.com/Riteshp2001/mpvRx) 的运行时保护思路，并针对本项目结构和 Android 官方温控 API 的数值定义重新实现。
+
 ## 播放不流畅怎么办
 
 按下面的顺序逐项尝试，每做一步就重新观察播放是否恢复正常：
@@ -67,6 +78,6 @@ Anime4K 可以在播放动漫时实时放大画面，并对线条、噪点和压
 
 ## 技术信息与许可
 
-本项目内置 [bloc97/Anime4K](https://github.com/bloc97/Anime4K) 的 GLSL 着色器，并把常用处理步骤组合成 A、B、C 及其增强预设。ArtCNN 模型由 Sirosky 训练，以 CC BY-NC 4.0 分发，其架构代码包含 MIT License。想了解应用实际加载了哪些着色器，可以查看 [Anime4KManager.kt](../app/src/main/java/app/marlboroadvance/mpvex/domain/anime4k/Anime4KManager.kt)。
+本项目内置 [bloc97/Anime4K](https://github.com/bloc97/Anime4K) 的 GLSL 着色器，并把常用处理步骤组合成 A、B、C 及其增强预设。ArtCNN 模型由 Sirosky 训练，以 CC BY-NC 4.0 分发，其架构代码包含 MIT License。想了解应用实际加载了哪些着色器，可以查看 [Anime4KManager.kt](../app/src/main/java/app/marlboroadvance/mpvex/domain/anime4k/Anime4KManager.kt)；运行时保护策略位于 [Anime4KSafetyPolicy.kt](../app/src/main/java/app/marlboroadvance/mpvex/ui/player/Anime4KSafetyPolicy.kt)。
 
 着色器的版权与许可遵循 Anime4K 源项目；本文只说明 mpvEx 如何使用这些着色器。
