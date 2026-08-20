@@ -3,12 +3,22 @@ package app.marlboroadvance.mpvex.preferences
 import app.marlboroadvance.mpvex.preferences.preference.PreferenceStore
 import app.marlboroadvance.mpvex.preferences.preference.getEnum
 import app.marlboroadvance.mpvex.ui.player.Debanding
+import app.marlboroadvance.mpvex.ui.player.Decoder
 
 class DecoderPreferences(
   preferenceStore: PreferenceStore,
 ) {
   val profile = preferenceStore.getString("mpv_profile", "fast")
-  val tryHWDecoding = preferenceStore.getBoolean("try_hw_dec", true)
+  val decoderPriority =
+    preferenceStore.getObject(
+      key = "decoder_priority",
+      defaultValue = listOf(Decoder.HWPlus, Decoder.HW, Decoder.SW),
+      serializer = { order -> order.joinToString(",") { it.name } },
+      deserializer = { stored ->
+        val parsed = stored.split(",").mapNotNull { name -> Decoder.entries.firstOrNull { it.name == name.trim() } }
+        (parsed + listOf(Decoder.HWPlus, Decoder.HW, Decoder.SW)).distinct().filter { it in Decoder.priorityModes }
+      },
+    )
   val gpuNext = preferenceStore.getBoolean("gpu_next")
   val useVulkan = preferenceStore.getBoolean("use_vulkan", false)
   val boostSdrToHdr = preferenceStore.getBoolean("boost_sdr_to_hdr", false)
