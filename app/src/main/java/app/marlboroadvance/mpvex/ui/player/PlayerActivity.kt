@@ -246,6 +246,7 @@ class PlayerActivity :
   private var savePlaybackStateJob: kotlinx.coroutines.Job? = null // Track ongoing save job
   private var wasPlayingBeforePause = false // Track if video was playing before pause
   private var isDecoderRestarting = false
+  private var pendingDecoderRestartIntent: Intent? = null
 
   // ==================== Background Playback ====================
 
@@ -654,8 +655,9 @@ class PlayerActivity :
         Thread.sleep(100)
       }
 
-      // Now safe to destroy MPV as internal threads have had time to shut down
-      MPVLib.destroy()
+      // Remove the SurfaceView callback and clear observed properties as part of
+      // destroying the native instance.
+      player.destroy()
       mpvInitialized = false
     }.onFailure { e ->
       Log.e(TAG, "Error cleaning up MPV", e)
@@ -690,26 +692,43 @@ class PlayerActivity :
         addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
       }
 
-      isDecoderRestarting = true
-      shutdownMPVForDecoderSwitch()
-      startActivity(restartIntent)
-      overridePendingTransition(0, 0)
-      finish()
+      beginDecoderRestart(restartIntent)
     }
   }
 
-  private suspend fun shutdownMPVForDecoderSwitch() {
+  private fun beginDecoderRestart(restartIntent: Intent) {
     if (!mpvInitialized) return
+    pendingDecoderRestartIntent = restartIntent
+    isDecoderRestarting = true
     isReady = false
     player.isExiting = true
     runCatching {
-      MPVLib.removeObserver(playerObserver)
+      // The renderer must release the Android surface before the native core is
+      // destroyed. Keep playerObserver registered so MPV_EVENT_SHUTDOWN can be
+      // used as the actual completion barrier instead of a guessed delay.
+      player.detachSurfaceForDecoderRestart()
       MPVLib.command("quit")
-      delay(120)
-      MPVLib.destroy()
-      mpvInitialized = false
     }.onFailure { error ->
-      Log.e(TAG, "Failed to restart MPV for decoder switch", error)
+      Log.e(TAG, "Failed to begin MPV decoder restart", error)
+      pendingDecoderRestartIntent = null
+      isDecoderRestarting = false
+      player.isExiting = false
+    }
+  }
+
+  private fun completeDecoderRestart() {
+    val restartIntent = pendingDecoderRestartIntent ?: return
+    pendingDecoderRestartIntent = null
+    runCatching {
+      MPVLib.removeObserver(playerObserver)
+      player.destroy()
+      mpvInitialized = false
+      startActivity(restartIntent)
+      overridePendingTransition(0, 0)
+      finish()
+    }.onFailure { error ->
+      Log.e(TAG, "Failed to complete MPV decoder restart", error)
+      isDecoderRestarting = false
     }
   }
 
@@ -1711,6 +1730,10 @@ class PlayerActivity :
    */
   internal fun event(eventId: Int) {
     when (eventId) {
+      MPVLib.MpvEvent.MPV_EVENT_SHUTDOWN -> {
+        if (isDecoderRestarting) completeDecoderRestart()
+      }
+
       MPVLib.MpvEvent.MPV_EVENT_FILE_LOADED -> {
         handleFileLoaded()
         isReady = true

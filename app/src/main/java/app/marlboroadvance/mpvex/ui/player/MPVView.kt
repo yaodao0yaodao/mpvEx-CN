@@ -45,6 +45,22 @@ class MPVView(
   var activeDecoder: Decoder = Decoder.HWPlus
     private set
 
+  /**
+   * Stop SurfaceView callbacks before asking mpv to quit. Leaving the callback
+   * attached lets the old Activity call detachSurface after a new MPV instance
+   * has started, which can access already-destroyed GPU mutexes.
+   */
+  fun detachSurfaceForDecoderRestart() {
+    holder.removeCallback(this)
+    runCatching {
+      MPVLib.setPropertyString("vo", "null")
+      MPVLib.setPropertyString("force-window", "no")
+      MPVLib.detachSurface()
+    }.onFailure { error ->
+      Log.w(TAG, "Failed to detach playback surface before decoder restart", error)
+    }
+  }
+
   fun getVideoOutAspect(): Double? {
     // Try to get aspect from video-params/aspect first
     val rawAspect = MPVLib.getPropertyDouble("video-params/aspect")
