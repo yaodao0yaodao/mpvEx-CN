@@ -1,6 +1,7 @@
 package app.marlboroadvance.mpvex.ui.player.controls
 
 import android.net.Uri
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -10,6 +11,7 @@ import androidx.compose.runtime.getValue
 import app.marlboroadvance.mpvex.preferences.preference.collectAsState
 import app.marlboroadvance.mpvex.ui.player.Decoder
 import app.marlboroadvance.mpvex.ui.player.Panels
+import app.marlboroadvance.mpvex.ui.player.PlayerActivity
 import app.marlboroadvance.mpvex.ui.player.Sheets
 import app.marlboroadvance.mpvex.ui.player.TrackNode
 import app.marlboroadvance.mpvex.ui.player.controls.components.sheets.AspectRatioSheet
@@ -70,6 +72,7 @@ fun PlayerSheets(
   onShowSheet: (Sheets) -> Unit,
   onDismissRequest: () -> Unit,
 ) {
+  val playerActivity = LocalActivity.current as? PlayerActivity
   when (sheetShown) {
     Sheets.None -> {}
     Sheets.SubtitleTracks -> {
@@ -236,7 +239,7 @@ fun PlayerSheets(
         onStartTimer = onStartSleepTimer,
         onDismissRequest = onDismissRequest,
         onEnterFiltersPanel = { onOpenPanel(Panels.VideoFilters) },
-        onAnime4KChanged = { },
+        onAnime4KChanged = { playerActivity?.player?.applyAnime4KShaders() },
       )
     }
 

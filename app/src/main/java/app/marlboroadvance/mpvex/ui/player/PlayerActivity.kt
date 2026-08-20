@@ -55,7 +55,9 @@ import `is`.xyz.mpv.MPVLib
 import `is`.xyz.mpv.MPVNode
 import `is`.xyz.mpv.Utils
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.android.ext.android.inject
@@ -335,6 +337,7 @@ class PlayerActivity :
     volumeControlStream = AudioManager.STREAM_MUSIC
 
     setupMPV()
+    startAnime4KSafetyMonitor()
     MediaPlaybackService.createNotificationChannel(this)
     setupAudio()
     setupBackPressHandler()
@@ -1647,6 +1650,9 @@ class PlayerActivity :
    * applies user preferences, and sets up metadata and media session.
    */
   private fun handleFileLoaded() {
+    player.resetAnime4KSafety()
+    player.applyAnime4KShaders()
+
     // Extract fileName from intent only if not already set
     // This preserves fileName set in onNewIntent or onCreate
     if (fileName.isBlank()) {
@@ -1779,6 +1785,19 @@ class PlayerActivity :
 
     // Asynchronously fetch better filename from HTTP headers for network streams
     fetchNetworkStreamTitle()
+  }
+
+  private fun startAnime4KSafetyMonitor() {
+    lifecycleScope.launch {
+      while (isActive) {
+        delay(ANIME4K_SAFETY_SAMPLE_INTERVAL_MS)
+        if (mpvInitialized && !player.isExiting && !isFinishing && viewModel.paused == false &&
+          player.isAnime4KConfigured()
+        ) {
+          player.refreshAnime4KSafety(ThermalMonitor.readPressure(this@PlayerActivity))
+        }
+      }
+    }
   }
 
   /**
@@ -3349,6 +3368,9 @@ class PlayerActivity :
      * Default subtitle speed (1.0 = normal).
      */
     private const val DEFAULT_SUB_SPEED = 1.0
+
+    /** Thermal and frame-pressure sampling interval; matches Android's low-frequency guidance. */
+    private const val ANIME4K_SAFETY_SAMPLE_INTERVAL_MS = 10_000L
 
     /**
      * General tag for logging from PlayerActivity.
