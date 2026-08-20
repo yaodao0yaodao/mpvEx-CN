@@ -39,8 +39,22 @@ class AppearancePreferences(
   val topRightControls =
     preferenceStore.getString(
       "top_right_controls",
-      "CURRENT_CHAPTER,DECODER,AUDIO_TRACK,SUBTITLES,MORE_OPTIONS",
+      "CURRENT_CHAPTER,DECODER,HDR_MODE,AUDIO_TRACK,SUBTITLES,MORE_OPTIONS",
     )
+
+  private val hdrControlMigration = preferenceStore.getBoolean("hdr_control_layout_migrated", false)
+
+  init {
+    if (!hdrControlMigration.get()) {
+      val controls = topRightControls.get().split(',').map(String::trim).filter(String::isNotEmpty).toMutableList()
+      if ("HDR_MODE" !in controls) {
+        val decoderIndex = controls.indexOf("DECODER")
+        controls.add(if (decoderIndex >= 0) decoderIndex + 1 else controls.size, "HDR_MODE")
+        topRightControls.set(controls.joinToString(","))
+      }
+      hdrControlMigration.set(true)
+    }
+  }
 
   val bottomRightControls =
     preferenceStore.getString(

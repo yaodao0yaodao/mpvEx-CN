@@ -18,6 +18,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
 import app.marlboroadvance.mpvex.R
 import app.marlboroadvance.mpvex.preferences.AudioPreferences
+import app.marlboroadvance.mpvex.preferences.DecoderPreferences
 import app.marlboroadvance.mpvex.preferences.GesturePreferences
 import app.marlboroadvance.mpvex.preferences.PlayerPreferences
 import app.marlboroadvance.mpvex.preferences.SubtitlesPreferences
@@ -96,6 +97,7 @@ class PlayerViewModel(
   private val playerPreferences: PlayerPreferences by inject()
   private val gesturePreferences: GesturePreferences by inject()
   private val audioPreferences: AudioPreferences by inject()
+  private val decoderPreferences: DecoderPreferences by inject()
   private val subtitlesPreferences: SubtitlesPreferences by inject()
   private val advancedPreferences: AdvancedPreferences by inject()
   private val json: Json by inject()
@@ -178,6 +180,13 @@ class PlayerViewModel(
   // Audio state
   val currentVolume = MutableStateFlow(host.audioManager.getStreamVolume(AudioManager.STREAM_MUSIC))
   private val volumeBoostCap by MPVLib.propInt["volume-max"].collectAsState(viewModelScope)
+
+  private val _videoDynamicRange = MutableStateFlow(VideoDynamicRange.UNKNOWN)
+  val videoDynamicRange: StateFlow<VideoDynamicRange> = _videoDynamicRange.asStateFlow()
+  val hdrPipelineAvailable = VulkanCapabilities.isDeviceSupported(host.context)
+  private val _sdrHdrBoostEnabled = MutableStateFlow(decoderPreferences.boostSdrToHdr.get())
+  val sdrHdrBoostEnabled: StateFlow<Boolean> = _sdrHdrBoostEnabled.asStateFlow()
+  private var appliedSdrHdrBoost = false
 
   init {
     // Keep the seek bar smooth while it is visible, then back off JNI polling when the
@@ -1908,6 +1917,50 @@ class PlayerViewModel(
 
   fun showToast(message: String) {
     Toast.makeText(host.context, message, Toast.LENGTH_SHORT).show()
+  }
+
+  fun onVideoLoaded(dynamicRange: VideoDynamicRange) {
+    _sdrHdrBoostEnabled.value = decoderPreferences.boostSdrToHdr.get()
+    if (dynamicRange == VideoDynamicRange.UNKNOWN) {
+      _videoDynamicRange.value = VideoDynamicRange.UNKNOWN
+      applySdrHdrBoostIfChanged(false)
+      return
+    }
+    updateVideoDynamicRange(dynamicRange, forceApply = true)
+  }
+
+  fun updateVideoDynamicRange(
+    dynamicRange: VideoDynamicRange,
+    forceApply: Boolean = false,
+  ) {
+    if (dynamicRange == VideoDynamicRange.UNKNOWN) return
+    if (!forceApply && dynamicRange == _videoDynamicRange.value) return
+    _videoDynamicRange.value = dynamicRange
+    applySdrHdrBoostIfChanged(dynamicRange == VideoDynamicRange.SDR && _sdrHdrBoostEnabled.value)
+  }
+
+  fun toggleHdrPlayback() {
+    if (!hdrPipelineAvailable) {
+      playerUpdate.value = PlayerUpdates.ShowText("此设备不支持线性 HDR")
+      return
+    }
+    when (_videoDynamicRange.value) {
+      VideoDynamicRange.HDR -> playerUpdate.value = PlayerUpdates.ShowText("HDR 片源正在使用线性 HDR")
+      VideoDynamicRange.SDR -> {
+        val enabled = !_sdrHdrBoostEnabled.value
+        _sdrHdrBoostEnabled.value = enabled
+        decoderPreferences.boostSdrToHdr.set(enabled)
+        applySdrHdrBoostIfChanged(enabled)
+        playerUpdate.value = PlayerUpdates.ShowText(if (enabled) "SDR 增强 HDR 已开启" else "SDR 增强 HDR 已关闭")
+      }
+      VideoDynamicRange.UNKNOWN -> playerUpdate.value = PlayerUpdates.ShowText("正在识别视频动态范围")
+    }
+  }
+
+  private fun applySdrHdrBoostIfChanged(enabled: Boolean) {
+    if (!hdrPipelineAvailable || enabled == appliedSdrHdrBoost) return
+    applySdrHdrBoostProperty(enabled)
+    appliedSdrHdrBoost = enabled
   }
 
   override fun onCleared() {

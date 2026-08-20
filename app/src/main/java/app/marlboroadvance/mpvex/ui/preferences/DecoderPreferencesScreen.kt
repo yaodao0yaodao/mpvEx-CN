@@ -38,7 +38,6 @@ import app.marlboroadvance.mpvex.preferences.DecoderPreferences
 import app.marlboroadvance.mpvex.preferences.preference.collectAsState
 import app.marlboroadvance.mpvex.presentation.Screen
 import app.marlboroadvance.mpvex.ui.player.Debanding
-import app.marlboroadvance.mpvex.ui.player.HdrScreenMode
 import app.marlboroadvance.mpvex.ui.player.MPVProfile
 import app.marlboroadvance.mpvex.ui.player.VulkanCapabilities
 import app.marlboroadvance.mpvex.ui.utils.LocalBackStack
@@ -236,101 +235,6 @@ object DecoderPreferencesScreen : Screen {
                   }
                 },
               )
-
-              PreferenceDivider()
-
-              val hdrOutputEnabled by preferences.hdrScreenOutput.collectAsState()
-              SwitchPreference(
-                value = hdrOutputEnabled,
-                onValueChange = { enabled ->
-                  preferences.hdrScreenOutput.set(enabled)
-                  if (enabled) {
-                    preferences.gpuNext.set(true)
-                    if (isVulkanSupported) preferences.useVulkan.set(true)
-                  }
-                },
-                title = { Text(stringResource(R.string.pref_hdr_output_title)) },
-                summary = {
-                  Column {
-                    Text(
-                      stringResource(R.string.pref_hdr_output_summary),
-                      color = MaterialTheme.colorScheme.outline,
-                    )
-                    Text(
-                      text = stringResource(R.string.pref_hdr_guide_link),
-                      color = MaterialTheme.colorScheme.primary,
-                      style = MaterialTheme.typography.bodySmall,
-                      textDecoration = TextDecoration.Underline,
-                      modifier =
-                        Modifier.clickable {
-                          val intent =
-                            Intent(
-                              Intent.ACTION_VIEW,
-                              Uri.parse("https://github.com/yaodao0yaodao/mpvEx-CN/blob/master/docs/HDR.zh-CN.md"),
-                            )
-                          context.startActivity(intent)
-                        },
-                    )
-                  }
-                },
-              )
-
-              PreferenceDivider()
-
-              val hdrMode by preferences.hdrScreenMode.collectAsState()
-              val availableHdrModes =
-                remember(isVulkanSupported) {
-                  if (isVulkanSupported) {
-                    HdrScreenMode.selectableModes
-                  } else {
-                    HdrScreenMode.selectableModes.filterNot { it == HdrScreenMode.LINEAR }
-                  }
-                }
-              val displayedHdrMode =
-                hdrMode.takeIf { it in availableHdrModes } ?: HdrScreenMode.defaultEnabledMode
-              ListPreference(
-                value = displayedHdrMode,
-                onValueChange = { mode ->
-                  preferences.hdrScreenMode.set(mode)
-                  preferences.gpuNext.set(true)
-                  if (isVulkanSupported) preferences.useVulkan.set(true)
-                },
-                values = availableHdrModes,
-                valueToText = { AnnotatedString(context.getString(it.titleRes)) },
-                enabled = hdrOutputEnabled,
-                title = { Text(stringResource(R.string.pref_hdr_mode_title)) },
-                summary = {
-                  Column {
-                    Text(
-                      stringResource(displayedHdrMode.descriptionRes),
-                      color = MaterialTheme.colorScheme.outline,
-                    )
-                    Text(
-                      stringResource(R.string.pref_hdr_mode_restart_summary),
-                      style = MaterialTheme.typography.bodySmall,
-                      color = MaterialTheme.colorScheme.primary,
-                    )
-                  }
-                },
-              )
-
-              if (displayedHdrMode == HdrScreenMode.LINEAR) {
-                PreferenceDivider()
-
-                val boostSdrToHdr by preferences.boostSdrToHdr.collectAsState()
-                SwitchPreference(
-                  value = boostSdrToHdr,
-                  onValueChange = { preferences.boostSdrToHdr.set(it) },
-                  enabled = hdrOutputEnabled && isVulkanSupported,
-                  title = { Text(stringResource(R.string.pref_hdr_boost_sdr_title)) },
-                  summary = {
-                    Text(
-                      stringResource(R.string.pref_hdr_boost_sdr_summary),
-                      color = MaterialTheme.colorScheme.outline,
-                    )
-                  },
-                )
-              }
 
               PreferenceDivider()
 

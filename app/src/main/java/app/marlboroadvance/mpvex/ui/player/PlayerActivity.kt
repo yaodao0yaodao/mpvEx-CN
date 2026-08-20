@@ -63,6 +63,16 @@ import kotlinx.coroutines.withContext
 import org.koin.android.ext.android.inject
 import java.io.File
 
+internal fun buildLoadFileCommand(
+  playableUri: String,
+  startPosition: Int?,
+): List<String> =
+  if (startPosition != null && startPosition > 0) {
+    listOf("loadfile", playableUri, "replace", "-1", "start=$startPosition")
+  } else {
+    listOf("loadfile", playableUri)
+  }
+
 /**
  * Main player activity that handles video playback using the MPV library.
  *
@@ -171,6 +181,11 @@ class PlayerActivity :
    * For network streams, this includes a hash of the URI to ensure uniqueness.
    */
   private var mediaIdentifier = ""
+
+  @Volatile private var pendingPlaybackState: PlaybackStateEntity? = null
+  @Volatile private var pendingPlaybackStateIdentifier: String? = null
+  @Volatile private var pendingStartPositionApplied = false
+  private var fileLoadRequestGeneration = 0L
 
   /**
    * Playlist of URIs for sequential playback
@@ -404,7 +419,7 @@ class PlayerActivity :
     // Set HTTP headers (including referer) BEFORE playing the file
     setHttpHeadersFromExtras(intent.extras)
 
-    getPlayableUri(intent)?.let(player::playFile)
+    getPlayableUri(intent)?.let(::loadFileWithSavedPosition)
 
     // Only set orientation immediately if NOT in Video mode
     // For Video mode, wait for video-params/aspect to become available
@@ -1575,6 +1590,7 @@ class PlayerActivity :
   ) {
     // Handle Double properties
     when (property) {
+      "video-params/sig-peak" -> viewModel.updateVideoDynamicRange(player.currentVideoDynamicRange())
       "video-params/aspect" -> {
         // Safety check: don't access MPV during cleanup
         if (!mpvInitialized || player.isExiting || isFinishing) return
@@ -1608,7 +1624,9 @@ class PlayerActivity :
     property: String,
     value: String,
   ) {
-    // Currently no String properties are handled
+    if (property == "video-params/gamma") {
+      viewModel.updateVideoDynamicRange(player.currentVideoDynamicRange())
+    }
   }
 
   /**
@@ -1651,7 +1669,7 @@ class PlayerActivity :
    */
   private fun handleFileLoaded() {
     player.resetAnime4KSafety()
-    player.applyAnime4KShaders()
+    viewModel.onVideoLoaded(player.currentVideoDynamicRange())
 
     // Extract fileName from intent only if not already set
     // This preserves fileName set in onNewIntent or onCreate
@@ -1785,6 +1803,39 @@ class PlayerActivity :
 
     // Asynchronously fetch better filename from HTTP headers for network streams
     fetchNetworkStreamTitle()
+  }
+
+  /**
+   * Resolves the saved position before handing the file to mpv. Supplying start as
+   * a file-local load option prevents mpv from presenting or playing timestamp zero
+   * while the database-backed resume seek is still pending.
+   */
+  private fun loadFileWithSavedPosition(playableUri: String) {
+    val requestedIdentifier = mediaIdentifier
+    val requestGeneration = ++fileLoadRequestGeneration
+    lifecycleScope.launch {
+      val state =
+        withContext(Dispatchers.IO) {
+          if (requestedIdentifier.isBlank()) null
+          else runCatching { playbackStateRepository.getVideoDataByTitle(requestedIdentifier) }
+            .onFailure { Log.e(TAG, "Failed to preload playback state", it) }
+            .getOrNull()
+        }
+
+      if (requestGeneration != fileLoadRequestGeneration || requestedIdentifier != mediaIdentifier) return@launch
+
+      val startPosition =
+        state?.lastPosition?.takeIf {
+          playerPreferences.savePositionOnQuit.get() && it > 0
+        }
+      pendingPlaybackState = state
+      pendingPlaybackStateIdentifier = requestedIdentifier
+      pendingStartPositionApplied = startPosition != null
+
+      withContext(Dispatchers.Default) {
+        MPVLib.command(*buildLoadFileCommand(playableUri, startPosition).toTypedArray())
+      }
+    }
   }
 
   private fun startAnime4KSafetyMonitor() {
@@ -2075,9 +2126,18 @@ class PlayerActivity :
     if (mediaIdentifier.isBlank()) return false
 
     return runCatching {
-      val state = playbackStateRepository.getVideoDataByTitle(mediaIdentifier)
+      val usedPreloadedState = pendingPlaybackStateIdentifier == mediaIdentifier
+      val state =
+        if (usedPreloadedState) pendingPlaybackState
+        else playbackStateRepository.getVideoDataByTitle(mediaIdentifier)
+      val positionWasAppliedAtLoad = usedPreloadedState && pendingStartPositionApplied
+      if (usedPreloadedState) {
+        pendingPlaybackState = null
+        pendingPlaybackStateIdentifier = null
+        pendingStartPositionApplied = false
+      }
 
-      applyPlaybackState(state)
+      applyPlaybackState(state, restorePosition = !positionWasAppliedAtLoad)
       applyDefaultSettings(state)
 
       state != null
@@ -2094,7 +2154,10 @@ class PlayerActivity :
    *
    * @param state The saved playback state entity
    */
-  private fun applyPlaybackState(state: PlaybackStateEntity?) {
+  private fun applyPlaybackState(
+    state: PlaybackStateEntity?,
+    restorePosition: Boolean = true,
+  ) {
     if (state == null) return
 
     val subDelay = state.subDelay / DELAY_DIVISOR
@@ -2136,7 +2199,7 @@ class PlayerActivity :
     MPVLib.setPropertyDouble("video-zoom", state.videoZoom.toDouble())
     viewModel.setVideoZoom(state.videoZoom)
 
-    if (playerPreferences.savePositionOnQuit.get() && state.lastPosition != 0) {
+    if (restorePosition && playerPreferences.savePositionOnQuit.get() && state.lastPosition != 0) {
       MPVLib.setPropertyInt("time-pos", state.lastPosition)
     }
   }
@@ -2348,12 +2411,7 @@ class PlayerActivity :
     setHttpHeadersFromExtras(intent.extras)
 
     // Load the new file
-    getPlayableUri(intent)?.let { uri ->
-      // Avoid blocking UI thread while mpv opens network streams (e.g., HLS).
-      lifecycleScope.launch(Dispatchers.Default) {
-        MPVLib.command("loadfile", uri)
-      }
-    }
+    getPlayableUri(intent)?.let(::loadFileWithSavedPosition)
   }
 
   // ==================== Picture-in-Picture Management ====================
@@ -3056,9 +3114,7 @@ class PlayerActivity :
 
     // Load the new video
     // Avoid blocking UI thread while mpv opens network streams (e.g., HLS).
-    lifecycleScope.launch(Dispatchers.Default) {
-      MPVLib.command("loadfile", playableUri)
-    }
+    loadFileWithSavedPosition(playableUri)
 
     // Update media title (this will trigger UI update)
     // Don't force media-title for m3u/m3u8 streams - let MPV provide it

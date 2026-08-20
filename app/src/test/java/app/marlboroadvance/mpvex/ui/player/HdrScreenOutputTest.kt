@@ -5,29 +5,23 @@ import org.junit.Test
 
 class HdrScreenOutputTest {
   @Test
-  fun `every mode owns the complete HDR property set`() {
-    HdrScreenMode.entries.forEach { mode ->
-      val settings = hdrScreenOutputSettings(mode, pipelineReady = true)
-
-      assertEquals(12, settings.size)
-      assertEquals(12, settings.map { it.first }.toSet().size)
-    }
+  fun `native hdr transfers are detected`() {
+    assertEquals(VideoDynamicRange.HDR, classifyVideoDynamicRange("pq", 1.0))
+    assertEquals(VideoDynamicRange.HDR, classifyVideoDynamicRange("HLG", null))
   }
 
   @Test
-  fun `unavailable pipeline resets HDR options`() {
-    val settings = hdrScreenOutputSettings(HdrScreenMode.BT_2100_PQ, pipelineReady = false).toMap()
-
-    assertEquals("auto", settings.getValue("target-trc"))
-    assertEquals("", settings.getValue("glsl-shader-opts"))
+  fun `signal peak detects hdr independently of codec`() {
+    assertEquals(VideoDynamicRange.HDR, classifyVideoDynamicRange("bt.1886", 4.0))
+    assertEquals(VideoDynamicRange.SDR, classifyVideoDynamicRange("bt.1886", 1.0))
   }
 
   @Test
-  fun `linear mode only boosts SDR when requested`() {
-    val normal = hdrScreenOutputSettings(HdrScreenMode.LINEAR, true, false).toMap()
-    val boosted = hdrScreenOutputSettings(HdrScreenMode.LINEAR, true, true).toMap()
-
-    assertEquals("no", normal.getValue("inverse-tone-mapping"))
-    assertEquals("yes", boosted.getValue("inverse-tone-mapping"))
+  fun `sdr boost only changes inverse tone mapping`() {
+    val normal = linearHdrSettings(true, false).toMap()
+    val boosted = linearHdrSettings(true, true).toMap()
+    assertEquals("no", normal["inverse-tone-mapping"])
+    assertEquals("yes", boosted["inverse-tone-mapping"])
+    assertEquals(normal - "inverse-tone-mapping", boosted - "inverse-tone-mapping")
   }
 }
