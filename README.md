@@ -13,8 +13,21 @@ ArtCNN、SDR→HDR 增强、智能渲染后端及部分播放性能保护的设�
 - **当前中文版版本：** v1.3.1
 - **独立包名：** `io.github.yaodao0yaodao.mpvex`，可与上游版本同时安装
 - **构建架构：** 仅提供 `arm64-v8a`
-- **附加改动：** 画面比例永久保存；字幕轨标题智能选择；音量调节优化；可靠缩略图；ArtCNN；播放中永久保存的 SDR→HDR 增强控件；智能渲染后端；自适应播放位置轮询；4K/8K Anime4K 保护；温控与帧压保护；无声无首帧泄漏的历史进度续播；应用内更新指向本项目 Releases
+- **附加改动：** 画面比例永久保存；字幕轨标题智能选择；音量调节优化；可靠缩略图；Anime4K/ArtCNN；SDR→HDR 增强；智能渲染与播放保护；无首帧和声音泄漏的历史进度续播；应用内更新指向本项目 Releases
 - **上游同步：** GitHub Actions 每日自动合并上游 `master`，随后构建 ARM64 APK；检测到上游正式版本时自动发布 Release
+
+## 界面预览
+
+<div class="image-row" align="center">
+  <img src="docs/images/player-landscape.jpg" alt="mpvEx 横屏播放界面与 SDR→HDR 增强控件" width="98%" />
+</div>
+
+<div class="image-row" align="center" justify-content="space-between">
+  <img src="docs/images/library.jpg" alt="mpvEx 中文媒体库" width="23.5%" />
+  <img src="docs/images/decoder-settings.jpg" alt="mpvEx 中文解码器设置" width="23.5%" />
+  <img src="docs/images/mpv-profiles.jpg" alt="mpvEx MPV 配置档" width="23.5%" />
+  <img src="docs/images/about-update.jpg" alt="mpvEx 关于与更新界面" width="23.5%" />
+</div>
 
 ## 项目简介
 
@@ -30,15 +43,14 @@ mpvExtended 是基于 libmpv 的 Android 视频播放器，源自 [mpv-android](
 
 ## 中文版增强
 
-- 字幕“首选语言”默认使用 `特效,Simplified,chs,CN,简,ch,zh,中`，逐级匹配字幕轨标题；完全没有标题命中时仍按语言代码回退。
-- 在线字幕搜索默认选择 Chinese。
-- Anime4K 实验性放大功能提供独立的[预设与变体中文说明](docs/Anime4K.zh-CN.md)。
-- Anime4K 新增 ArtCNN 固定模型。播放器不再提供 PQ、HLG、BT.2020、Linear 等手动 HDR 模式：原生 HDR 交给 mpv 自动处理，唯一可调功能是播放界面中的 SDR→HDR 增强。该控件会永久保存选择，不再与解码器设置页维护两套开关。
-- 历史进度会在 `loadfile` 时直接作为起始位置交给 mpv，避免先播放文件开头再跳转造成的首帧和短暂声音泄漏；切集时复用 HDR 与着色器状态，减少重复重建渲染管线。
-- 播放器根据控件可见性和暂停状态降低位置查询频率，减少不必要的 JNI 唤醒。
-- 4K/8K 视频从底层禁用 Anime4K；普通 Anime4K 可在温控或持续帧压力下临时降档，ArtCNN 只会临时关闭或恢复，不会替换为其他预设。
-- Vulkan 设置下方提供[解码器与省电配置中文说明](docs/Decoder-and-Battery.zh-CN.md)，帮助在画质、性能和续航之间取舍。
-- MPV 配置档中的 `GPU HQ` 已由 mpv 弃用，界面明确标记为“GPU HQ（已弃用）”。
+相较于上游 [marlboro-advance/mpvEx](https://github.com/marlboro-advance/mpvEx)，本项目主要增加或调整了：
+
+- 完整简体中文界面，以及更适合中文片源的字幕轨智能匹配和在线字幕默认语言。
+- 独立包名、ARM64 APK、项目内更新检查和每日上游同步。
+- 画面比例永久保存、音量调节优化、缩略图可靠性改进，以及不会泄漏文件开头画面或声音的历史进度续播。
+- Anime4K、ArtCNN，以及面向高分辨率、温度和播放压力的自动保护。
+- 播放界面 SDR→HDR 增强、智能渲染后端和播放性能优化。
+- [Anime4K/ArtCNN 中文说明](docs/Anime4K.zh-CN.md)与[解码器和省电配置说明](docs/Decoder-and-Battery.zh-CN.md)。
 
 ## 上游介绍
 
@@ -77,20 +89,6 @@ the [upstream Issues](https://github.com/marlboro-advance/mpvEx/issues) section.
 [![Download Release](https://img.shields.io/badge/Download-ARM64%20APK-blue?style=for-the-badge)](https://github.com/yaodao0yaodao/mpvEx-CN/releases/latest)
 
 > 本项目使用独立包名和签名，不能覆盖安装上游版本；两者可以共存。
-
----
-
-## 界面预览
-<div class="image-row" align="center">
-  <img src="docs/images/player-landscape.jpg" alt="mpvEx 横屏播放界面" width="98%" />
-</div>
-
-<div class="image-row" align="center" justify-content="space-between">
-  <img src="docs/images/library.jpg" alt="mpvEx 中文媒体库" width="23.5%" />
-  <img src="docs/images/decoder-settings.jpg" alt="mpvEx 中文解码器设置" width="23.5%" />
-  <img src="docs/images/mpv-profiles.jpg" alt="mpvEx MPV 配置档" width="23.5%" />
-  <img src="docs/images/about-update.jpg" alt="mpvEx 关于与更新界面" width="23.5%" />
-</div>
 
 ---
 
