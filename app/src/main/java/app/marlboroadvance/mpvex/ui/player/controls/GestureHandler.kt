@@ -348,8 +348,8 @@ fun GestureHandler(
           var lastMPVVolumeValue = currentMPVVolume ?: 100
           var lastBrightnessValue = currentBrightness
           val brightnessGestureSens = 0.001f
-          val volumeGestureSens = 0.017f
-          val mpvVolumeGestureSens = 0.017f
+          val volumeGestureSens = calculateVolumeGestureSensitivity(viewModel.maxVolume, size.height)
+          val mpvVolumeGestureSens = calculateVolumeGestureSensitivity(volumeBoostingCap, size.height)
 
           // Original speed for long press
           var originalSpeed = playbackSpeed ?: 1f
@@ -530,7 +530,7 @@ fun GestureHandler(
                               startingY,
                               currentPosition.y,
                               volumeGestureSens,
-                            )
+                            ).coerceIn(0..viewModel.maxVolume)
 
                             if (newVolume != lastVolumeValue) {
                               viewModel.changeVolumeTo(newVolume)
@@ -1017,6 +1017,11 @@ fun calculateNewVerticalGestureValue(originalValue: Int, startingY: Float, newY:
 
 fun calculateNewVerticalGestureValue(originalValue: Float, startingY: Float, newY: Float, sensitivity: Float): Float {
   return originalValue + ((startingY - newY) * sensitivity)
+}
+
+internal fun calculateVolumeGestureSensitivity(maxValue: Int, viewportHeightPx: Int): Float {
+  if (maxValue <= 0 || viewportHeightPx <= 0) return 0f
+  return maxValue.toFloat() / viewportHeightPx.toFloat() * 1.25f
 }
 
 private fun formatSeekTime(seconds: Int): String {

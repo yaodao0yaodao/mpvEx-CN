@@ -8,10 +8,10 @@
 
 - **汉化日期：** 2026-08-19
 - **汉化时版本：** v1.2.9
-- **当前中文版版本：** v1.2.9（跟随上游真实版本号，不单独抬高版本）
+- **当前中文版版本：** v1.2.9.1（前三段跟随上游版本，第四段用于中文版修复与小功能递增）
 - **独立包名：** `io.github.yaodao0yaodao.mpvex`，可与上游版本同时安装
 - **构建架构：** 仅提供 `arm64-v8a`
-- **附加改动：** 画面比例设置永久保存；字幕轨标题按有序关键词智能选择；应用内更新指向本项目 Releases
+- **附加改动：** 画面比例设置永久保存；字幕轨标题按有序关键词智能选择；音量手势与物理按键响应优化；播放列表复用可靠缩略图生成；应用内更新指向本项目 Releases
 - **上游同步：** GitHub Actions 每日自动合并上游 `master`，随后构建 ARM64 APK；检测到上游正式版本时自动发布 Release
 
 ## 项目简介
@@ -133,7 +133,7 @@ Copy the contents of `keystore.txt` and paste it as the value for the `SIGNING_K
 
 ### Creating a Release
 
-1. 按上游真实版本更新 `versionCode` 和 `versionName`；标签必须与 `versionName` 完全一致，工作流会拒绝虚构或不一致的版本
+1. 上游正式版本使用原三段版本号；中文版修复和小功能在其后递增第四段（例如 `1.2.9.1`、`1.2.9.2`）。标签必须与 `versionName` 完全一致
 2. Commit the changes
 3. Create and push a tag:
    ```bash

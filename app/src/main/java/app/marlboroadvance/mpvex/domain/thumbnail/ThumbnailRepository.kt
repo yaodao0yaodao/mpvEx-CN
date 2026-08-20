@@ -3,6 +3,8 @@ package app.marlboroadvance.mpvex.domain.thumbnail
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
+import android.provider.MediaStore
 import android.util.LruCache
 import app.marlboroadvance.mpvex.domain.media.model.Video
 import app.marlboroadvance.mpvex.utils.media.MediaInfoOps
@@ -138,6 +140,17 @@ class ThumbnailRepository(
       return@withContext deferred.await()
     }
 
+  suspend fun getThumbnailForUri(
+    uri: Uri,
+    path: String,
+    displayName: String,
+    widthPx: Int,
+    heightPx: Int,
+  ): Bitmap? {
+    val video = withContext(Dispatchers.IO) { resolveVideo(uri, path, displayName) }
+    return getThumbnail(video, widthPx, heightPx)
+  }
+
   suspend fun getCachedThumbnail(
     video: Video,
     widthPx: Int,
@@ -250,7 +263,8 @@ class ThumbnailRepository(
       return "$base|network"
     }
     
-    return "${video.size}|${video.dateModified}|${video.duration}"
+    val source = video.path.ifBlank { video.uri.toString() }
+    return "$source|${video.size}|${video.dateModified}|${video.duration}"
   }
 
   private fun keyToFileName(key: String): String {
@@ -335,10 +349,14 @@ class ThumbnailRepository(
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
           // Use modern API for Android Q+
           // Build proper MediaStore content URI
-          val contentUri = android.content.ContentUris.withAppendedId(
-            android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-            video.id
-          )
+          val contentUri = if (video.uri.scheme == "content") {
+            video.uri
+          } else {
+            android.content.ContentUris.withAppendedId(
+              android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+              video.id
+            )
+          }
           android.util.Log.d("ThumbnailRepository", "Generating MediaStore thumbnail for ${video.displayName} using loadThumbnail")
           val thumbnail = context.contentResolver.loadThumbnail(
             contentUri,
@@ -445,7 +463,8 @@ class ThumbnailRepository(
     
     val durationSec = video.duration / 1000.0
     
-    if (durationSec <= 0.0 || durationSec < 20.0) return 0.0
+    if (durationSec <= 0.0) return 3.0
+    if (durationSec < 20.0) return 0.0
     
     val candidate = 3.0
     
@@ -459,6 +478,93 @@ class ThumbnailRepository(
       path.startsWith("rtsp://", ignoreCase = true) ||
       path.startsWith("ftp://", ignoreCase = true) ||
       path.startsWith("sftp://", ignoreCase = true)
+  }
+
+  private fun resolveVideo(uri: Uri, suppliedPath: String, displayName: String): Video {
+    val projection = arrayOf(
+      MediaStore.Video.Media._ID,
+      MediaStore.Video.Media.DATA,
+      MediaStore.Video.Media.DURATION,
+      MediaStore.Video.Media.SIZE,
+      MediaStore.Video.Media.DATE_MODIFIED,
+      MediaStore.Video.Media.DATE_ADDED,
+      MediaStore.Video.Media.WIDTH,
+      MediaStore.Video.Media.HEIGHT,
+      MediaStore.Video.Media.MIME_TYPE,
+    )
+
+    var id = runCatching { android.content.ContentUris.parseId(uri) }.getOrDefault(-1L)
+    var resolvedPath = when {
+      uri.scheme == "file" -> uri.path.orEmpty()
+      suppliedPath.startsWith("file:", ignoreCase = true) -> Uri.parse(suppliedPath).path.orEmpty()
+      suppliedPath.startsWith("content:", ignoreCase = true) -> ""
+      else -> suppliedPath
+    }
+    var duration = 0L
+    var size = 0L
+    var dateModified = 0L
+    var dateAdded = 0L
+    var width = 0
+    var height = 0
+    var mimeType = runCatching { context.contentResolver.getType(uri) }.getOrNull().orEmpty()
+
+    runCatching {
+      val queryUri: Uri
+      val selection: String?
+      val selectionArgs: Array<String>?
+      if (uri.scheme == "content") {
+        queryUri = uri
+        selection = null
+        selectionArgs = null
+      } else {
+        queryUri = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+        selection = "${MediaStore.Video.Media.DATA} = ?"
+        selectionArgs = arrayOf(resolvedPath)
+      }
+
+      context.contentResolver.query(queryUri, projection, selection, selectionArgs, null)?.use { cursor ->
+        if (cursor.moveToFirst()) {
+          fun long(column: String): Long = cursor.getColumnIndex(column).takeIf { it >= 0 }?.let(cursor::getLong) ?: 0L
+          fun int(column: String): Int = cursor.getColumnIndex(column).takeIf { it >= 0 }?.let(cursor::getInt) ?: 0
+          fun string(column: String): String? = cursor.getColumnIndex(column).takeIf { it >= 0 }?.let(cursor::getString)
+
+          id = long(MediaStore.Video.Media._ID).takeIf { it > 0 } ?: id
+          resolvedPath = string(MediaStore.Video.Media.DATA).orEmpty().ifBlank { resolvedPath }
+          duration = long(MediaStore.Video.Media.DURATION)
+          size = long(MediaStore.Video.Media.SIZE)
+          dateModified = long(MediaStore.Video.Media.DATE_MODIFIED)
+          dateAdded = long(MediaStore.Video.Media.DATE_ADDED)
+          width = int(MediaStore.Video.Media.WIDTH)
+          height = int(MediaStore.Video.Media.HEIGHT)
+          mimeType = string(MediaStore.Video.Media.MIME_TYPE).orEmpty().ifBlank { mimeType }
+        }
+      }
+    }
+
+    val file = resolvedPath.takeIf { it.isNotBlank() }?.let(::File)
+    if (size <= 0L) size = file?.takeIf(File::exists)?.length() ?: 0L
+    if (dateModified <= 0L) dateModified = file?.takeIf(File::exists)?.lastModified()?.div(1000L) ?: 0L
+
+    return Video(
+      id = id,
+      title = displayName,
+      displayName = displayName,
+      path = resolvedPath.ifBlank { uri.toString() },
+      uri = uri,
+      duration = duration,
+      durationFormatted = "",
+      size = size,
+      sizeFormatted = "",
+      dateModified = dateModified,
+      dateAdded = dateAdded,
+      mimeType = mimeType,
+      bucketId = "",
+      bucketDisplayName = "",
+      width = width,
+      height = height,
+      fps = 0f,
+      resolution = if (width > 0 && height > 0) "${width}x$height" else "",
+    )
   }
 
   private fun folderSignature(
