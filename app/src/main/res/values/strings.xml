@@ -218,6 +218,7 @@
   <string name="pref_decoder_debanding_title">Debanding</string>
   <string name="pref_decoder_vulkan_title">Use Vulkan</string>
   <string name="pref_decoder_vulkan_summary">Enable Vulkan rendering on supported devices (may improve performance)</string>
+  <string name="pref_decoder_guide_link">Decoder guide</string>
   <string name="pref_decoder_vulkan_not_supported">Not supported (requires Android 13+ with Vulkan 1.3)</string>
   <string name="pref_decoder_yuv420p_title">Use YUV420P pixel format</string>
   <string name="pref_decoder_yuv420p_summary">May fix black screens on some video codecs, can also improve performance at the cost of quality</string>
@@ -273,7 +274,7 @@
   <string name="pref_advanced_features_tooltip">Enable experimental or advanced features such as stats page and Anime4K upscaling</string>
   <string name="pref_anime4k_title">Anime4K upscaling (Experimental)</string>
   <string name="pref_anime4k_summary">Enable Anime4K upscaling filter</string>
-  <string name="pref_anime4k_guide_link">Anime4K presets and variants guide</string>
+  <string name="pref_anime4k_guide_link">Anime4K guide</string>
   <string name="pref_anime4k_incompatibility">Anime4K Incompatibility</string>
   <string name="pref_anime4k_gpu_next_error">gpu-next is incompatible with Anime4K shaders. When Anime4K is enabled, the app will automatically use the legacy \'gpu\' backend for shader compatibility.</string>
   <string name="pref_anime4k_cannot_use_with_gpu_next">Cannot use Anime4K when gpu-next is enabled</string>
