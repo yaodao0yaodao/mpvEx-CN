@@ -4,17 +4,16 @@
 [![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/yaodao0yaodao/mpvEx-CN.svg?logo=github&label=GitHub&cacheSeconds=3600)](https://github.com/yaodao0yaodao/mpvEx-CN/releases/latest)
 [![GitHub all releases](https://img.shields.io/github/downloads/yaodao0yaodao/mpvEx-CN/total?logo=github&cacheSeconds=3600)](https://github.com/yaodao0yaodao/mpvEx-CN/releases/latest)
 
-这是面向中文用户独立维护的 Android mpv/libmpv 开源视频播放器，源自 [marlboro-advance/mpvEx](https://github.com/marlboro-advance/mpvEx)，播放器内的软件名称仍为 **mpvEx**。项目提供完整简体中文界面、ARM64 APK、Anime4K/ArtCNN 放大、SDR→HDR 增强、智能播放保护、字幕轨标题智能匹配等实用改进。
+这是面向中文用户独立维护的 Android mpv/libmpv 开源视频播放器，源自 [marlboro-advance/mpvEx](https://github.com/marlboro-advance/mpvEx)，播放器内的软件名称仍为 **mpvEx**。项目提供完整简体中文界面、AI 超分辨率、SDR→HDR 增强、自动播放保护、字幕轨标题智能匹配等实用改进。
 
-ArtCNN、SDR→HDR 增强、智能渲染后端及部分播放性能保护的设计与实现参考并适配自 [Riteshp2001/mpvRx](https://github.com/Riteshp2001/mpvRx)。由于两个项目的代码结构不同，本项目采用了独立适配；温控判断按 Android 官方 API 的数值含义重新实现，并非直接复制。
+ArtCNN、HDR、ThumbFast 定位预览、字幕双指缩放、统计/控制台及部分播放逻辑参考并适配自 [Riteshp2001/mpvRx](https://github.com/Riteshp2001/mpvRx)。两个项目结构不同，本项目按自身定位重新组合，并未移植 mpvRx 的 UI 自定义体系。
 
 - **汉化日期：** 2026-08-19
 - **汉化时版本：** v1.2.9
-- **当前中文版版本：** v1.3.2-test.1（测试版）
+- **当前测试版本：** v1.4.0-test.1；包含播放器控制、解码回退、AI 超分辨率与运行时自动控制的大版本重构
 - **独立包名：** `io.github.yaodao0yaodao.mpvex`，可与上游版本同时安装
-- **构建架构：** 仅提供 `arm64-v8a`
-- **附加改动：** 解码器优先级与临时切换；硬件解码增强兼容模式；画面比例永久保存；字幕轨标题智能选择；音量调节优化；可靠缩略图；Anime4K/ArtCNN；SDR→HDR 增强；智能渲染与播放保护；无首帧和声音泄漏的历史进度续播；应用内更新指向本项目 Releases
-- **维护与构建：** 本项目已停止无验证的上游自动合并；每次推送均由 GitHub Actions 构建 ARM64 APK，上游改动会在人工检查和适配后按需引入
+- **附加改动：** 解码器优先级与临时切换、AI 超分辨率、SDR→HDR 增强、自动裁黑边、ThumbFast 定位预览、自动播放保护，以及更适合中文片源的字幕选择
+- **维护与构建：** 已停止无验证的上游自动合并；每次提交由 GitHub Actions 自动构建，上游改动只在人工检查和适配后引入
 
 ## 界面预览
 
@@ -46,53 +45,35 @@ mpvExtended 是基于 libmpv 的 Android 视频播放器，源自 [mpv-android](
 相较于上游 [marlboro-advance/mpvEx](https://github.com/marlboro-advance/mpvEx)，本项目主要增加或调整了：
 
 - 完整简体中文界面，以及更适合中文片源的字幕轨智能匹配和在线字幕默认语言。
-- 独立包名、ARM64 APK、项目内更新检查，以及每次推送自动构建。
-- 可排序的“解码器优先级”；播放界面可临时切换三种解码模式，退出播放后恢复设置顺序。
-- 硬件解码增强兼容模式可保留 `gpu-next`，并在播放期间暂停 Vulkan、线性 HDR 和 Anime4K；原生 HDR 仍按片源类型自动输出。
-- 画面比例永久保存、音量调节优化、缩略图可靠性改进，以及不会泄漏文件开头画面或声音的历史进度续播。
-- Anime4K、ArtCNN，以及面向高分辨率、温度和播放压力的自动保护。
-- 播放界面 SDR→HDR 增强、智能渲染后端和播放性能优化。
+- 独立包名、项目内更新检查，以及每次提交自动构建。
+- 可排序的解码器优先级；硬件解码增强由用户主动启用，播放界面切换只在本次播放器内生效。
+- 硬件解码增强保留 `gpu-next`，播放期间暂停 Vulkan、线性 HDR 与 AI 超分辨率，并明确提示其字幕兼容 HDR 实际为 HDR→SDR。
+- 播放速度单击在 1×/2×/3× 循环；进度条一次提交定位并强制使用 ThumbFast 预览；字幕支持双指缩放。
+- 保守、稳定且为下方硬字幕预留空间的自动剪切黑边，画面比例与 AI 放大倍率按剪切后的有效画面计算。
+- Anime4K A/B/C/C+ 与多种 ArtCNN/AniSD 模型；仅在显示区域确实需要约 1.2× 放大时临时加载。
+- 原生 HDR 自动进入线性 HDR；SDR→HDR 增强由播放控件永久开关；硬件解码增强下显示片源 HDR 类型但不伪装成 HDR 输出。
+- 全新的低帧率自动控制，不监控温度，只在连续 10 秒实际渲染不足时逐级临时减负，切换文件后恢复。
+- 音量调节优化、可靠缩略图、无首帧或声音泄漏的历史进度续播、低电量解码建议、中文统计页与控制台。
 - [Anime4K/ArtCNN 中文说明](docs/Anime4K.zh-CN.md)与[解码器和省电配置说明](docs/Decoder-and-Battery.zh-CN.md)。
 
 ## 上游介绍
 
-**mpvExtended is a fork of [mpv-android](https://github.com/mpv-android/mpv-android), built on the libmpv library. It aims
-to combine the powerful features of mpv with an easy to use interface and additional
-features.**
+mpvExtended 是基于 libmpv 的 [mpv-android](https://github.com/mpv-android/mpv-android) 分支，目标是把 mpv 的强大能力放进易用的移动界面，并补充实用播放功能。上游提供 Material 3 Expressive 界面、高级配置与脚本、画中画、后台播放、高质量渲染、网络串流、文件管理、文件夹媒体选择、外部字幕与音轨、手势缩放、搜索、SMB/FTP/WebDAV 以及自定义播放列表；软件完全开源、无广告，也不索取与功能无关的权限。
 
-- Simpler and Easier to Use UI
-- Material3 Expressive Design
-- Advanced Configuration and Scripting
-- Enhanced Playback Features
-- Picture-in-Picture (PiP)
-- Background Playback
-- High-Quality Rendering
-- Network Streaming
-- File Management
-- Completely free and open source and without any ads or excessive permissions
-- Media picker with tree and folder view modes
-- External Subtitle support
-- Zoom gesture
-- External Audio support
-- Search Functionality
-- SMB/FTP/WebDAV support
-- Custom Playlist management support
-
-**This project is still in development and is expected to have bugs. Please report any bugs you find in
-the [upstream Issues](https://github.com/marlboro-advance/mpvEx/issues) section.**
+上游仍在开发，可能存在问题。仅在上游原版也能复现的问题请反馈到 [上游 Issues](https://github.com/marlboro-advance/mpvEx/issues)；本项目新增功能或中文界面问题请反馈到 [mpvEx-CN Issues](https://github.com/yaodao0yaodao/mpvEx-CN/issues)。
 
 ---
 
 ## Installation
 
 ### Stable Release
-从本项目的 [GitHub Releases](https://github.com/yaodao0yaodao/mpvEx-CN/releases) 下载最新的已签名 ARM64 APK。
+从本项目的 [GitHub Releases](https://github.com/yaodao0yaodao/mpvEx-CN/releases) 下载最新的已签名 APK。
 
-[![Download Release](https://img.shields.io/badge/Download-ARM64%20APK-blue?style=for-the-badge)](https://github.com/yaodao0yaodao/mpvEx-CN/releases/latest)
+[![Download Release](https://img.shields.io/badge/Download-APK-blue?style=for-the-badge)](https://github.com/yaodao0yaodao/mpvEx-CN/releases/latest)
 
 > 本项目使用独立包名和签名，不能覆盖安装上游版本；两者可以共存。
 
-> `v1.3.2-test.1` 是解码器切换重构测试版，请在 [Releases](https://github.com/yaodao0yaodao/mpvEx-CN/releases) 页面手动选择；GitHub 的“最新稳定版”仍指向 v1.3.1。
+> `v1.4.0-test.1` 是大版本重构测试版，请在 [Releases](https://github.com/yaodao0yaodao/mpvEx-CN/releases) 页面手动选择；GitHub 的“最新稳定版”仍指向 v1.3.1。
 
 ---
 
@@ -103,10 +84,6 @@ the [upstream Issues](https://github.com/marlboro-advance/mpvEx/issues) section.
 - JDK 17
 - Android SDK with build tools 34.0.0+
 - Git (for version information in builds)
-
-### APK Variant
-
-This fork builds only **arm64-v8a**, for modern 64-bit ARM Android devices.
 
 ---
 
@@ -155,7 +132,7 @@ Copy the contents of `keystore.txt` and paste it as the value for the `SIGNING_K
    git tag -a v1.0.0 -m "Release version 1.0.0"
    git push origin v1.0.0
    ```
-4. GitHub Actions will automatically build and sign the ARM64 APK, generate its SHA-256 checksum, and publish the stable release
+4. GitHub Actions will automatically build and sign the APK, generate its SHA-256 checksum, and publish the stable release
 
 ### Creating a Preview Release
 
@@ -175,6 +152,9 @@ Copy the contents of `keystore.txt` and paste it as the value for the `SIGNING_K
 - [Next player](https://github.com/anilbeesetti/nextplayer)
 - [Gramophone](https://github.com/FoedusProgramme/Gramophone)
 - [mpvRx](https://github.com/Riteshp2001/mpvRx)（ArtCNN、SDR→HDR 增强及部分性能功能参考实现）
+- [ArtCNN](https://github.com/Artoriuz/ArtCNN)、[Upscale-Hub](https://github.com/Sirosky/Upscale-Hub)、[Anime4K](https://github.com/bloc97/Anime4K)
+
+完整来源与许可证见 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。项目主许可证仍为 Apache-2.0。
 
 ---
 

@@ -39,6 +39,7 @@ import app.marlboroadvance.mpvex.repository.NetworkRepository
 import app.marlboroadvance.mpvex.utils.update.UpdateDialog
 import app.marlboroadvance.mpvex.utils.update.UpdateViewModel
 import app.marlboroadvance.mpvex.ui.browser.MainScreen
+import app.marlboroadvance.mpvex.ui.preferences.DecoderPreferencesScreen
 import app.marlboroadvance.mpvex.ui.theme.DarkMode
 import app.marlboroadvance.mpvex.ui.theme.MpvexTheme
 import app.marlboroadvance.mpvex.ui.utils.LocalBackStack
@@ -54,6 +55,7 @@ import org.koin.android.ext.android.inject
  * Main entry point for the application
  */
 class MainActivity : ComponentActivity() {
+  private val openDecoderSettings = MutableStateFlow(false)
   private val appearancePreferences by inject<AppearancePreferences>()
   private val networkRepository by inject<NetworkRepository>()
   
@@ -69,6 +71,7 @@ class MainActivity : ComponentActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    openDecoderSettings.value = intent.getBooleanExtra(EXTRA_OPEN_DECODER_SETTINGS, false)
     
     PermissionUtils.setMediaAccessLauncher(mediaAccessLauncher)
 
@@ -98,6 +101,12 @@ class MainActivity : ComponentActivity() {
         }
       }
     }
+  }
+
+  override fun onNewIntent(intent: android.content.Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    if (intent.getBooleanExtra(EXTRA_OPEN_DECODER_SETTINGS, false)) openDecoderSettings.value = true
   }
 
   override fun onDestroy() {
@@ -152,6 +161,13 @@ class MainActivity : ComponentActivity() {
 
     @Suppress("UNCHECKED_CAST")
     val typedBackstack = backstack as NavBackStack<Screen>
+    val shouldOpenDecoderSettings by openDecoderSettings.collectAsState()
+    LaunchedEffect(shouldOpenDecoderSettings) {
+      if (shouldOpenDecoderSettings) {
+        typedBackstack.add(DecoderPreferencesScreen)
+        openDecoderSettings.value = false
+      }
+    }
 
     val context = LocalContext.current
     val currentVersion = BuildConfig.VERSION_NAME.replace("-dev", "")
@@ -244,5 +260,9 @@ class MainActivity : ComponentActivity() {
         }
       }
     }
+  }
+
+  companion object {
+    const val EXTRA_OPEN_DECODER_SETTINGS = "mpvex.open_decoder_settings"
   }
 }

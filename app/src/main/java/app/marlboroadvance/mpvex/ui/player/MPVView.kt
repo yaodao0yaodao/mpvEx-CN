@@ -8,6 +8,7 @@ import android.util.Log
 import android.view.KeyCharacterMap
 import android.view.KeyEvent
 import app.marlboroadvance.mpvex.preferences.AdvancedPreferences
+import app.marlboroadvance.mpvex.BuildConfig
 import app.marlboroadvance.mpvex.preferences.AudioPreferences
 import app.marlboroadvance.mpvex.preferences.DecoderPreferences
 import app.marlboroadvance.mpvex.preferences.PlayerPreferences
@@ -169,7 +170,7 @@ class MPVView(
     MPVLib.setOptionString("demuxer-max-bytes", "${cacheMegs * 1024 * 1024}")
     MPVLib.setOptionString("demuxer-max-back-bytes", "${cacheMegs * 1024 * 1024}")
     
-    val logLevel = if (advancedPreferences.verboseLogging.get()) "v" else "warn"
+    val logLevel = if (BuildConfig.DEBUG || advancedPreferences.verboseLogging.get()) "v" else "warn"
     MPVLib.setOptionString("msg-level", "all=$logLevel")
 
     MPVLib.setPropertyBoolean("keep-open", true)

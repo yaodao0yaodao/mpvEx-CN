@@ -18,6 +18,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
+import android.os.BatteryManager
 import android.provider.MediaStore
 import android.util.Log
 import android.view.KeyEvent
@@ -117,6 +118,21 @@ class PlayerActivity :
    * Observer for MPV events.
    */
   private val playerObserver by lazy { PlayerObserver(this) }
+  private var previousBatteryPercent: Int? = null
+  private val lowBatteryReceiver =
+    object : BroadcastReceiver() {
+      override fun onReceive(context: Context, intent: Intent) {
+        val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+        val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, 100).coerceAtLeast(1)
+        if (level < 0) return
+        val percent = level * 100 / scale
+        val previous = previousBatteryPercent
+        previousBatteryPercent = percent
+        if (previous != null && previous >= 30 && percent < 30) {
+          LowBatteryAdvisor.show(this@PlayerActivity, decoderPreferences.hardwarePlusEnabled.get())
+        }
+      }
+    }
 
   // ==================== Dependency Injection ====================
 
@@ -353,6 +369,7 @@ class PlayerActivity :
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
     activeInstance = this
+    registerReceiver(lowBatteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
     setContentView(binding.root)
 
     // OPTIMIZATION: Set volume control stream so hardware buttons control media volume
@@ -588,6 +605,7 @@ class PlayerActivity :
   override fun onDestroy() {
     Log.d(TAG, "PlayerActivity onDestroy")
     if (activeInstance === this) activeInstance = null
+    runCatching { unregisterReceiver(lowBatteryReceiver) }
 
     runCatching {
       // OPTIMIZATION: Prevent any further UI updates or callbacks

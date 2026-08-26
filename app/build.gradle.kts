@@ -19,8 +19,8 @@ android {
     applicationId = "io.github.yaodao0yaodao.mpvex"
     minSdk = 26
     targetSdk = 36
-    versionCode = 13020
-    versionName = "1.3.2-test.1"
+    versionCode = 14001
+    versionName = "1.4.0-test.1"
 
     vectorDrawables {
       useSupportLibrary = true
