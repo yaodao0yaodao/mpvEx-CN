@@ -69,6 +69,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -92,6 +93,7 @@ import androidx.constraintlayout.compose.Dimension
 import app.marlboroadvance.mpvex.R
 import app.marlboroadvance.mpvex.preferences.AppearancePreferences
 import app.marlboroadvance.mpvex.preferences.AudioPreferences
+import app.marlboroadvance.mpvex.preferences.AdvancedPreferences
 import app.marlboroadvance.mpvex.preferences.PlayerPreferences
 import app.marlboroadvance.mpvex.preferences.preference.collectAsState
 import app.marlboroadvance.mpvex.preferences.preference.deleteAndGet
@@ -109,6 +111,7 @@ import app.marlboroadvance.mpvex.ui.player.controls.components.ControlsButton
 import app.marlboroadvance.mpvex.ui.player.controls.components.MultipleSpeedPlayerUpdate
 import app.marlboroadvance.mpvex.ui.player.controls.components.SeekPlayerUpdate
 import app.marlboroadvance.mpvex.ui.player.controls.components.SeekbarWithTimers
+import app.marlboroadvance.mpvex.ui.player.controls.components.SeekThumbnailPreviewBubble
 import app.marlboroadvance.mpvex.ui.player.controls.components.SlideToUnlock
 import app.marlboroadvance.mpvex.ui.player.controls.components.SpeedControlSlider
 import app.marlboroadvance.mpvex.ui.player.controls.components.TextPlayerUpdate
@@ -125,6 +128,61 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.update
 import org.koin.compose.koinInject
 import kotlin.math.abs
+
+private data class StatsPageSixSnapshot(
+  val title: String = "--",
+  val decoder: String = "--",
+  val renderer: String = "--",
+  val video: String = "--",
+  val audio: String = "--",
+  val fps: String = "-- / --",
+  val dropped: Int = 0,
+  val hdr: String = "--",
+)
+
+@Composable
+private fun CustomStatsPageSixOverlay(modifier: Modifier = Modifier) {
+  val snapshot by produceState(initialValue = StatsPageSixSnapshot()) {
+    while (true) {
+      val sourceFps = MPVLib.getPropertyDouble("container-fps") ?: 0.0
+      val renderFps = MPVLib.getPropertyDouble("estimated-vf-fps") ?: 0.0
+      val gamma = MPVLib.getPropertyString("video-params/gamma").orEmpty()
+      val primaries = MPVLib.getPropertyString("video-params/primaries").orEmpty()
+      val peak = MPVLib.getPropertyDouble("video-params/sig-peak") ?: 0.0
+      value =
+        StatsPageSixSnapshot(
+          title = MPVLib.getPropertyString("media-title") ?: "--",
+          decoder = MPVLib.getPropertyString("hwdec-current") ?: "no（软件解码）",
+          renderer = listOfNotNull(MPVLib.getPropertyString("current-vo"), MPVLib.getPropertyString("gpu-api")).joinToString(" / ").ifBlank { "--" },
+          video = MPVLib.getPropertyString("video-codec") ?: "--",
+          audio = MPVLib.getPropertyString("audio-codec-name") ?: "--",
+          fps = if (sourceFps > 0.0 || renderFps > 0.0) "%.2f / %.2f".format(renderFps, sourceFps) else "-- / --",
+          // frame-drop-count is a real mpv property. The old drop-frame-count spelling
+          // does not exist and was the source of recurring log errors.
+          dropped = MPVLib.getPropertyInt("frame-drop-count") ?: 0,
+          hdr = if (gamma == "pq" || gamma == "hlg" || (primaries == "bt.2020" && peak > 1.0)) "HDR" else "SDR",
+        )
+      delay(if (MPVLib.getPropertyBoolean("pause") == true) 2000L else 1000L)
+    }
+  }
+
+  Surface(
+    modifier = modifier.widthIn(max = 520.dp),
+    color = Color.Black.copy(alpha = 0.72f),
+    shape = RoundedCornerShape(8.dp),
+  ) {
+    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+      Text("播放诊断", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+      Text("文件：${snapshot.title}", color = Color.White, fontSize = 10.sp)
+      Text("解码：${snapshot.decoder}", color = Color.White, fontSize = 10.sp)
+      Text("渲染：${snapshot.renderer}", color = Color.White, fontSize = 10.sp)
+      Text("视频：${snapshot.video} · ${snapshot.hdr}", color = Color.White, fontSize = 10.sp)
+      Text("音频：${snapshot.audio}", color = Color.White, fontSize = 10.sp)
+      Text("渲染 / 片源 FPS：${snapshot.fps}", color = Color.White, fontSize = 10.sp)
+      Text("丢帧：${snapshot.dropped}", color = Color.White, fontSize = 10.sp)
+    }
+  }
+}
 
 @Suppress("CompositionLocalAllowlist")
 val LocalPlayerButtonsClickEvent = staticCompositionLocalOf { {} }
@@ -159,6 +217,8 @@ fun PlayerControls(
   val hideBackground by appearancePreferences.hidePlayerButtonsBackground.collectAsState()
   val playerPreferences = koinInject<PlayerPreferences>()
   val audioPreferences = koinInject<AudioPreferences>()
+  val advancedPreferences = koinInject<AdvancedPreferences>()
+  val statisticsPage by advancedPreferences.enabledStatisticsPage.collectAsState()
   val showSystemStatusBar by playerPreferences.showSystemStatusBar.collectAsState()
   val showSystemNavigationBar by playerPreferences.showSystemNavigationBar.collectAsState()
   val interactionSource = remember { MutableInteractionSource() }
@@ -171,6 +231,7 @@ fun PlayerControls(
   val position by MPVLib.propInt["time-pos"].collectAsState()
   val precisePosition by viewModel.precisePosition.collectAsState()
   val preciseDuration by viewModel.preciseDuration.collectAsState()
+  val seekThumbnailPreview by viewModel.seekThumbnailPreview.collectAsState()
   val playbackSpeed by MPVLib.propFloat["speed"].collectAsState()
   val doubleTapSeekAmount by viewModel.doubleTapSeekAmount.collectAsState()
   val showDoubleTapOvals by playerPreferences.showDoubleTapOvals.collectAsState()
@@ -298,7 +359,18 @@ fun PlayerControls(
         val (bottomRightControls, bottomLeftControls) = createRefs()
         val playerPauseButton = createRef()
         val seekbar = createRef()
+        val seekThumbnail = createRef()
         val (playerUpdates) = createRefs()
+        val customStats = createRef()
+
+        if (statisticsPage == 6) {
+          CustomStatsPageSixOverlay(
+            modifier = Modifier.constrainAs(customStats) {
+              start.linkTo(parent.start, spacing.medium)
+              top.linkTo(parent.top, spacing.medium)
+            },
+          )
+        }
 
         val isBrightnessSliderShown by viewModel.isBrightnessSliderShown.collectAsState()
         val isVolumeSliderShown by viewModel.isVolumeSliderShown.collectAsState()
@@ -533,6 +605,11 @@ fun PlayerControls(
                 text = String.format("Zoom:%3d%%", zoomPercentage), 
                 modifier = Modifier, // Let content size determine width
               )
+            }
+
+            is PlayerUpdates.SubtitleZoom -> {
+              val scale = (currentPlayerUpdate as PlayerUpdates.SubtitleZoom).scale
+              TextPlayerUpdate(text = String.format("字幕缩放：%.2fx", scale))
             }
 
             is PlayerUpdates.HorizontalSeek -> {
@@ -890,30 +967,23 @@ fun PlayerControls(
         ) {
           val invertDuration by playerPreferences.invertDuration.collectAsState()
           val seekbarStyle by appearancePreferences.seekbarStyle.collectAsState()
-          var wasPlayerAlreadyPaused by remember { mutableStateOf(false) }
 
           SeekbarWithTimers(
             position = precisePosition,
             duration = if (preciseDuration > 0) preciseDuration else duration?.toFloat() ?: 0f,
             onValueChange = {
-              if (!isSeeking) {
-                // First drag frame - pause playback
-                wasPlayerAlreadyPaused = paused ?: false
-                if (!wasPlayerAlreadyPaused) {
-                  viewModel.pause()
-                }
-              }
               isSeeking = true
               resetControlsTimestamp = System.currentTimeMillis()
-              viewModel.seekTo(it.toInt())
+              viewModel.updateSeekThumbnailPreview(
+                it,
+                if (preciseDuration > 0) preciseDuration else duration?.toFloat() ?: 0f,
+              )
             },
-            onValueChangeFinished = {
+            onValueChangeFinished = { targetPosition ->
               isSeeking = false
               resetControlsTimestamp = System.currentTimeMillis()
-              // Unpause if it wasn't paused before seeking
-              if (!wasPlayerAlreadyPaused) {
-                viewModel.unpause()
-              }
+              viewModel.hideSeekThumbnailPreview()
+              viewModel.seekTo(targetPosition.toInt())
               viewModel.showControls()
             },
             timersInverted = Pair(false, invertDuration),
@@ -929,6 +999,21 @@ fun PlayerControls(
             loopEnd = abLoopB?.toFloat(),
           )
         }
+
+        SeekThumbnailPreviewBubble(
+          position = seekThumbnailPreview.positionSeconds,
+          duration = if (preciseDuration > 0) preciseDuration else duration?.toFloat() ?: 0f,
+          visible = seekThumbnailPreview.visible && !areControlsLocked,
+          bitmap = seekThumbnailPreview.bitmap,
+          isLoading = seekThumbnailPreview.isLoading,
+          modifier =
+            Modifier.constrainAs(seekThumbnail) {
+              start.linkTo(seekbar.start)
+              end.linkTo(seekbar.end)
+              bottom.linkTo(seekbar.top, spacing.small)
+              width = Dimension.fillToConstraints
+            },
+        )
 
         AnimatedVisibility(
           visible = controlsShown && !areControlsLocked,

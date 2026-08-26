@@ -26,6 +26,7 @@ import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Headset
 import androidx.compose.material.icons.outlined.HdrOn
+import androidx.compose.material.icons.outlined.Hd
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -43,6 +44,7 @@ enum class PlayerButton(
   BOOKMARKS_CHAPTERS(Icons.Outlined.Bookmarks),
   PLAYBACK_SPEED(Icons.Outlined.Speed),
   DECODER(Icons.Outlined.Memory),
+  AI_UPSCALE(Icons.Outlined.Hd),
   HDR_MODE(Icons.Outlined.HdrOn),
   SCREEN_ROTATION(Icons.Outlined.ScreenRotation),
   FRAME_NAVIGATION(Icons.Outlined.Camera),
@@ -52,7 +54,6 @@ enum class PlayerButton(
   LOCK_CONTROLS(Icons.Outlined.LockOpen),
   AUDIO_TRACK(Icons.Outlined.Audiotrack),
   SUBTITLES(Icons.Outlined.Subtitles),
-  MORE_OPTIONS(Icons.Outlined.MoreVert),
   CURRENT_CHAPTER(Icons.Outlined.Bookmarks), // <-- CHANGED ICON
   REPEAT_MODE(Icons.Outlined.Repeat),
   SHUFFLE(Icons.Outlined.Shuffle),
@@ -86,6 +87,7 @@ fun getPlayerButtonLabel(button: PlayerButton): String =
     PlayerButton.BOOKMARKS_CHAPTERS -> stringResource(R.string.player_button_chapters_bookmarks)
     PlayerButton.PLAYBACK_SPEED -> stringResource(R.string.player_button_playback_speed)
     PlayerButton.DECODER -> stringResource(R.string.player_button_decoder)
+    PlayerButton.AI_UPSCALE -> stringResource(R.string.player_button_ai_upscale)
     PlayerButton.HDR_MODE -> stringResource(R.string.player_button_hdr)
     PlayerButton.SCREEN_ROTATION -> stringResource(R.string.player_button_screen_rotation)
     PlayerButton.FRAME_NAVIGATION -> stringResource(R.string.player_button_frame_navigation)
@@ -95,7 +97,6 @@ fun getPlayerButtonLabel(button: PlayerButton): String =
     PlayerButton.LOCK_CONTROLS -> stringResource(R.string.player_button_lock_controls)
     PlayerButton.AUDIO_TRACK -> stringResource(R.string.player_button_audio_track)
     PlayerButton.SUBTITLES -> stringResource(R.string.player_button_subtitles)
-    PlayerButton.MORE_OPTIONS -> stringResource(R.string.player_button_more_options)
     PlayerButton.CURRENT_CHAPTER -> stringResource(R.string.player_button_current_chapter)
     PlayerButton.REPEAT_MODE -> stringResource(R.string.player_button_repeat_mode)
     PlayerButton.SHUFFLE -> stringResource(R.string.player_button_shuffle)

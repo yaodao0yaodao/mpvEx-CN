@@ -214,6 +214,15 @@
                 <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\..*\\..*\\.m3u8*" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".ui.player.DecoderRestartActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:process=":decoder_restart"
+            android:taskAffinity=""
+            android:theme="@style/Theme.mpvex.NoDisplay" />
         <activity android:name=".presentation.crash.CrashActivity" />
 
         <activity

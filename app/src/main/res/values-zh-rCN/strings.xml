@@ -211,6 +211,12 @@
   <string name="player_hwplus_hdr_identifying">硬件解码增强模式 · 正在识别视频动态范围</string>
   <string name="pref_decoder_priority_title">解码器优先级</string>
   <string name="pref_decoder_priority_summary">使用箭头调整播放启动时的尝试顺序；播放界面的解码器选择仅对本次播放临时生效。</string>
+  <string name="pref_decoder_hwplus_opt_in">允许使用硬件解码增强</string>
+  <string name="pref_decoder_hwplus_enable_title">启用硬件解码增强？</string>
+  <string name="pref_decoder_hwplus_warning">硬件解码增强使用 MediaCodec 直接输出，播放高码率视频时性能和续航通常最好，但渲染器无法处理这类画面。</string>
+  <string name="pref_decoder_hwplus_incompatible_title">硬件解码增强模式下不可用</string>
+  <string name="pref_decoder_hwplus_incompatible_body">Vulkan、Anime4K / ArtCNN、线性 HDR 和 SDR→HDR 增强。控件仍可显示 HDR 片源类型，但为了正常显示字幕，此路径会将 HDR 转为 SDR，并不是真正的 HDR 屏幕输出。</string>
+  <string name="pref_decoder_hwplus_enable_anyway">仍然启用</string>
   <string name="pref_decoder_gpu_next_title">使用 gpu-next</string>
   <string name="pref_decoder_gpu_next_summary">新一代渲染后端</string>
   <string name="pref_decoder_gpu_next_enable_title">启用 gpu-next？</string>
@@ -550,4 +556,11 @@
   <string name="playlist_refresh_success">播放列表刷新成功</string>
   <string name="playlist_refresh_error">刷新播放列表失败：%s</string>
   <string name="playlist_m3u_badge">M3U</string>
+  <string name="player_button_ai_upscale">AI 超分辨率</string>
+  <string name="artcnn_mode_c4f32">ArtCNN C4F32 普通版</string>
+  <string name="artcnn_mode_c4f32_dn">ArtCNN C4F32 DN（降噪、柔和）</string>
+  <string name="artcnn_mode_c4f32_ds">ArtCNN C4F32 DS（降噪、锐化）</string>
+  <string name="artcnn_mode_anisd">AniSD ArtCNN C4F32 普通版</string>
+  <string name="artcnn_mode_anisd_cmp">AniSD ArtCNN C4F32 CMP</string>
+  <string name="artcnn_mode_ani4kv2_cmp">Ani4Kv2 ArtCNN C4F32 CMP（官方原版）</string>
 </resources>

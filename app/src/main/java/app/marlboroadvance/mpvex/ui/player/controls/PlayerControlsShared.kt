@@ -53,6 +53,7 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Headset
 import androidx.compose.material.icons.filled.HdrOff
 import androidx.compose.material.icons.filled.HdrOn
+import androidx.compose.material.icons.filled.Hd
 import androidx.compose.material.icons.filled.BlurOn
 import androidx.compose.material.icons.outlined.BlurOn
 import androidx.compose.material.icons.outlined.Autorenew
@@ -91,7 +92,18 @@ import app.marlboroadvance.mpvex.ui.player.controls.components.CurrentChapter
 import app.marlboroadvance.mpvex.ui.theme.controlColor
 import app.marlboroadvance.mpvex.ui.theme.spacing
 import dev.vivvvek.seeker.Segment
+import `is`.xyz.mpv.MPVLib
+import kotlin.math.abs
 
+internal fun nextPlaybackSpeed(current: Float): Float =
+  when {
+    abs(current - 1.0f) < 0.01f -> 2.0f
+    abs(current - 2.0f) < 0.01f -> 3.0f
+    abs(current - 3.0f) < 0.01f -> 1.0f
+    else -> 1.0f
+  }
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun RenderPlayerButton(
   button: PlayerButton,
@@ -214,6 +226,9 @@ fun RenderPlayerButton(
     }
 
     PlayerButton.PLAYBACK_SPEED -> {
+      val cycleSpeed = {
+        MPVLib.setPropertyDouble("speed", nextPlaybackSpeed(playbackSpeed).toDouble())
+      }
       if (isSpeedNonOne) {
         Surface(
           shape = CircleShape,
@@ -228,13 +243,14 @@ fun RenderPlayerButton(
           modifier = Modifier
             .height(buttonSize)
             .clip(CircleShape)
-            .clickable(
+            .combinedClickable(
               interactionSource = remember { MutableInteractionSource() },
               indication = ripple(bounded = true),
               onClick = {
                 clickEvent()
-                onOpenSheet(Sheets.PlaybackSpeed)
+                cycleSpeed()
               },
+              onLongClick = { onOpenSheet(Sheets.PlaybackSpeed) },
             ),
         ) {
           Row(
@@ -262,7 +278,8 @@ fun RenderPlayerButton(
       } else {
         ControlsButton(
           icon = Icons.Default.Speed,
-          onClick = { onOpenSheet(Sheets.PlaybackSpeed) },
+          onClick = cycleSpeed,
+          onLongClick = { onOpenSheet(Sheets.PlaybackSpeed) },
           color = if (hideBackground) controlColor else MaterialTheme.colorScheme.onSurface,
           modifier = Modifier.size(buttonSize),
         )
@@ -295,13 +312,14 @@ fun RenderPlayerButton(
         modifier = Modifier
           .height(buttonSize)
           .clip(CircleShape)
-          .clickable(
+          .combinedClickable(
             interactionSource = remember { MutableInteractionSource() },
             indication = ripple(bounded = true),
             onClick = {
               clickEvent()
               onOpenSheet(Sheets.Decoders)
             },
+            onLongClick = { onOpenSheet(Sheets.More) },
           ),
       ) {
         Row(
@@ -340,6 +358,17 @@ fun RenderPlayerButton(
         icon = if (active) Icons.Default.HdrOn else Icons.Default.HdrOff,
         onClick = viewModel::toggleHdrPlayback,
         color = if (active) MaterialTheme.colorScheme.primary
+        else if (hideBackground) controlColor else MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.size(buttonSize),
+      )
+    }
+
+    PlayerButton.AI_UPSCALE -> {
+      val hardwarePlusMode by viewModel.hardwarePlusMode.collectAsState()
+      ControlsButton(
+        icon = Icons.Default.Hd,
+        onClick = { onOpenSheet(Sheets.AiUpscale) },
+        color = if (hardwarePlusMode) MaterialTheme.colorScheme.outline
         else if (hideBackground) controlColor else MaterialTheme.colorScheme.onSurface,
         modifier = Modifier.size(buttonSize),
       )
@@ -601,16 +630,6 @@ fun RenderPlayerButton(
         Icons.Default.Subtitles,
         onClick = { onOpenSheet(Sheets.SubtitleTracks) },
         onLongClick = { onOpenPanel(Panels.SubtitleDelay) },
-        color = if (hideBackground) controlColor else MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.size(buttonSize),
-      )
-    }
-
-    PlayerButton.MORE_OPTIONS -> {
-      ControlsButton(
-        Icons.Default.MoreVert,
-        onClick = { onOpenSheet(Sheets.More) },
-        onLongClick = { onOpenPanel(Panels.VideoFilters) },
         color = if (hideBackground) controlColor else MaterialTheme.colorScheme.onSurface,
         modifier = Modifier.size(buttonSize),
       )

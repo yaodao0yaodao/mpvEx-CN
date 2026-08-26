@@ -113,20 +113,6 @@ object AudioPreferencesScreen : Screen {
           )
           
           PreferenceDivider()
-          val audioPitchCorrection by preferences.audioPitchCorrection.collectAsState()
-          SwitchPreference(
-            value = audioPitchCorrection,
-            onValueChange = { preferences.audioPitchCorrection.set(it) },
-            title = { Text(stringResource(R.string.pref_audio_pitch_correction_title)) },
-            summary = { 
-              Text(
-                stringResource(R.string.pref_audio_pitch_correction_summary),
-                color = MaterialTheme.colorScheme.outline,
-              ) 
-            },
-          )
-          
-          PreferenceDivider()
           val volumeNormalization by preferences.volumeNormalization.collectAsState()
           SwitchPreference(
             value = volumeNormalization,

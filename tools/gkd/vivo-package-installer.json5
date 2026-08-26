@@ -1,0 +1,79 @@
+{
+  id: 2026082601,
+  name: 'mpvEx-CN 调试安装自动授权（VIVO）',
+  version: 1,
+  author: 'mpvEx-CN',
+  description: '仅在 VIVO 系统软件包安装程序中自动完成 ADB 调试包的授权与安装确认。',
+  apps: [
+    {
+      id: 'com.android.packageinstaller',
+      name: '软件包安装程序',
+      groups: [
+        {
+          key: 0,
+          name: 'VIVO 安装授权',
+          desc: '点击“授权本次安装”及风险确认复选框。',
+          enable: true,
+          fastQuery: true,
+          activityIds: [
+            '.PackageInterceptActivity',
+            '.PackageInstallerActivity',
+          ],
+          rules: [
+            {
+              key: 0,
+              activityIds: '.PackageInterceptActivity',
+              matches: '[vid="tv_install_guide"][text*="授权本次安装"][visibleToUser=true]',
+              position: {
+                left: 'width * 0.4609',
+                top: 'height * 0.75',
+              },
+            },
+            {
+              key: 1,
+              matches: '[vid="checkbox" || vid="deleted_file_state_cb"][checked=false][visibleToUser=true]',
+            },
+            {
+              key: 2,
+              preKeys: [1],
+              matches: '@LinearLayout[clickable=true][id=null] > [text="继续安装"][visibleToUser=true]',
+            },
+          ],
+        },
+        {
+          key: 1,
+          name: 'VIVO 自动确认安装',
+          desc: '只在系统安装器页面点击明确的安装操作，不处理其他应用的弹窗。',
+          enable: true,
+          fastQuery: true,
+          forcedTime: 15000,
+          activityIds: [
+            '.PackageInstallerActivity',
+            '.PackageInterceptActivity',
+            '.NewInstallInstalling',
+            '.InstallSuccess',
+            '.DeleteStagedFileOnResult',
+          ],
+          rules: [
+            {
+              key: 0,
+              matches: '[text="继续安装"][focusable=true || parent.focusable=true || parent.parent.focusable=true]',
+            },
+            {
+              key: 1,
+              matches: '[vid="confirm_bottom_button_layout"][visibleToUser=true]',
+            },
+            {
+              key: 2,
+              matches: '[text="安装"][clickable=true][visibleToUser=true]',
+            },
+            {
+              key: 3,
+              matches: '[text="完成"][clickable=true || focusable=true][visibleToUser=true]',
+            },
+          ],
+        },
+      ],
+    },
+  ],
+}

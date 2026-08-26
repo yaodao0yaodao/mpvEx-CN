@@ -79,7 +79,6 @@ enum class MPVProfile(
   Default(R.string.mpv_profile_default, "default"),
   HighQuality(R.string.mpv_profile_high_quality, "high-quality"),
   LowLatency(R.string.mpv_profile_low_latency, "low-latency"),
-  SwFast(R.string.mpv_profile_sw_fast, "sw-fast"),
   ;
 
   companion object {
@@ -95,6 +94,7 @@ enum class Sheets {
   AudioTracks,
   Chapters,
   Decoders,
+  AiUpscale,
   More,
   VideoZoom,
   AspectRatios,
@@ -123,6 +123,10 @@ sealed class PlayerUpdates {
   data object AspectRatio : PlayerUpdates()
 
   data object VideoZoom : PlayerUpdates()
+
+  data class SubtitleZoom(
+    val scale: Float,
+  ) : PlayerUpdates()
 
   data class HorizontalSeek(
     val currentTime: String,

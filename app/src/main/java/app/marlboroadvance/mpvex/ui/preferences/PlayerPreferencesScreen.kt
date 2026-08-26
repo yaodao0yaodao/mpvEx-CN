@@ -132,24 +132,6 @@ object PlayerPreferencesScreen : Screen {
               
               PreferenceDivider()
               
-              val playlistMode by preferences.playlistMode.collectAsState()
-              SwitchPreference(
-                value = playlistMode,
-                onValueChange = preferences.playlistMode::set,
-                title = { Text(text = "启用上一个/下一个导航") },
-                summary = {
-                  Text(
-                    text = if (playlistMode)
-                      "为文件夹中的所有视频显示上一个/下一个按钮"
-                    else
-                      "单独播放视频（选择多个可创建播放列表）",
-                    color = MaterialTheme.colorScheme.outline,
-                  )
-                },
-              )
-              
-              PreferenceDivider()
-
               val rememberBrightness by preferences.rememberBrightness.collectAsState()
               SwitchPreference(
                 value = rememberBrightness,
@@ -198,15 +180,6 @@ object PlayerPreferencesScreen : Screen {
           
           item {
             PreferenceCard {
-              val showDoubleTapOvals by preferences.showDoubleTapOvals.collectAsState()
-              SwitchPreference(
-                value = showDoubleTapOvals,
-                onValueChange = preferences.showDoubleTapOvals::set,
-                title = { Text(stringResource(R.string.show_splash_ovals_on_double_tap_to_seek)) },
-              )
-              
-              PreferenceDivider()
-              
               val showSeekTimeWhileSeeking by preferences.showSeekTimeWhileSeeking.collectAsState()
               SwitchPreference(
                 value = showSeekTimeWhileSeeking,

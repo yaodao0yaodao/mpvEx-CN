@@ -56,6 +56,7 @@ import `is`.xyz.mpv.MPVLib
 import app.marlboroadvance.mpvex.preferences.AudioPreferences
 import app.marlboroadvance.mpvex.preferences.GesturePreferences
 import app.marlboroadvance.mpvex.preferences.PlayerPreferences
+import app.marlboroadvance.mpvex.preferences.SubtitlesPreferences
 import app.marlboroadvance.mpvex.preferences.preference.collectAsState
 import app.marlboroadvance.mpvex.presentation.components.LeftSideOvalShape
 import app.marlboroadvance.mpvex.presentation.components.RightSideOvalShape
@@ -83,6 +84,7 @@ fun GestureHandler(
   val playerPreferences = koinInject<PlayerPreferences>()
   val audioPreferences = koinInject<AudioPreferences>()
   val gesturePreferences = koinInject<GesturePreferences>()
+  val subtitlesPreferences = koinInject<SubtitlesPreferences>()
   val panelShown by viewModel.panelShown.collectAsState()
   val allowGesturesInPanels by playerPreferences.allowGesturesInPanels.collectAsState()
   val paused by MPVLib.propBoolean["pause"].collectAsState()
@@ -634,7 +636,9 @@ fun GestureHandler(
         }
       }
       .pointerInput(pinchToZoomGesture, panAndZoomEnabled, areControlsLocked, isVerticalGestureActive) {
-        if (!pinchToZoomGesture || areControlsLocked || isVerticalGestureActive) return@pointerInput
+        // Subtitle pinch is always enabled. Starting the pinch near the active subtitle region
+        // adjusts subtitle scale; elsewhere it retains the existing video zoom/pan behavior.
+        if (areControlsLocked || isVerticalGestureActive) return@pointerInput
 
         // Helper: get video display dimensions at 1x (how mpv fits the video to screen)
         fun videoDisplaySize(): Pair<Float, Float> {
@@ -678,6 +682,10 @@ fun GestureHandler(
           var prevDist = 0f
           var prevMidX = 0f
           var prevMidY = 0f
+          var subtitleZoomMode = false
+          var initialSubtitleScale = 1f
+          var initialSubtitleDistance = 1f
+          var lastSubtitleScale = 1f
           val panSmooth = floatArrayOf(0f, 0f, 0f) // smoothX, smoothY, initialized
 
           awaitFirstDown(requireUnconsumed = false)
@@ -701,22 +709,41 @@ fun GestureHandler(
                 zoom = MPVLib.getPropertyDouble("video-zoom")?.toFloat() ?: 0f
                 prevMidX = midX
                 prevMidY = midY
+                val subtitleSelected =
+                  (MPVLib.getPropertyInt("sid") ?: 0) > 0 ||
+                    (MPVLib.getPropertyInt("secondary-sid") ?: 0) > 0
+                subtitleZoomMode =
+                  subtitleSelected &&
+                    midX in (size.width * 0.15f)..(size.width * 0.85f) &&
+                    midY >= size.height * 0.52f
+                if (subtitleZoomMode) {
+                  initialSubtitleScale =
+                    MPVLib.getPropertyDouble("sub-scale")?.toFloat()
+                      ?: subtitlesPreferences.subScale.get()
+                  initialSubtitleDistance = dist.coerceAtLeast(1f)
+                  lastSubtitleScale = initialSubtitleScale
+                }
               } else {
-                // Activate on significant pinch movement
                 if (!gestureStarted && abs(dist - prevDist) > 5f) {
                   gestureStarted = true
-                  viewModel.playerUpdate.update { PlayerUpdates.VideoZoom }
+                  viewModel.playerUpdate.update {
+                    if (subtitleZoomMode) PlayerUpdates.SubtitleZoom(initialSubtitleScale) else PlayerUpdates.VideoZoom
+                  }
                 }
 
                 if (gestureStarted) {
-                  // Per-frame zoom: small delta from previous distance → naturally smooth
-                  val zoomDelta = ln((dist / prevDist).toDouble()).toFloat() * 1.2f
-                  zoom = (zoom + zoomDelta).coerceIn(-1f, 3f)
-                  viewModel.setVideoZoom(zoom)
-
-                  // Simultaneous pan while pinching
-                  if (panAndZoomEnabled) {
-                    applyPan(midX - prevMidX, midY - prevMidY, 2f.pow(zoom), panSmooth)
+                  if (subtitleZoomMode) {
+                    lastSubtitleScale =
+                      (initialSubtitleScale * (dist / initialSubtitleDistance)).coerceIn(0.1f, 5f)
+                    MPVLib.setPropertyDouble("sub-scale", lastSubtitleScale.toDouble())
+                    viewModel.playerUpdate.update { PlayerUpdates.SubtitleZoom(lastSubtitleScale) }
+                  } else if (pinchToZoomGesture) {
+                    val zoomDelta = ln((dist / prevDist).toDouble()).toFloat() * 1.2f
+                    zoom = (zoom + zoomDelta).coerceIn(-1f, 3f)
+                    viewModel.setVideoZoom(zoom)
+                    if (panAndZoomEnabled) {
+                      applyPan(midX - prevMidX, midY - prevMidY, 2f.pow(zoom), panSmooth)
+                    }
                   }
                 }
 
@@ -730,6 +757,11 @@ fun GestureHandler(
               break
             }
           } while (event.changes.any { it.pressed })
+
+          if (subtitleZoomMode && gestureStarted) {
+            subtitlesPreferences.subScale.set(lastSubtitleScale)
+          }
+          viewModel.playerUpdate.update { PlayerUpdates.None }
         }
       }
       // Single-finger pan (only when Pan & Zoom enabled and zoomed in)

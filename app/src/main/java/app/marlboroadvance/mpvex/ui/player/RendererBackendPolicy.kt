@@ -13,7 +13,8 @@ internal fun initialHwdecValue(
   selectedDecoder?.value ?: decoderPriorityHwdecValue(decoderPriority)
 
 internal fun decoderPriorityHwdecValue(priority: List<Decoder>): String {
-  val normalized = (priority + Decoder.priorityModes).distinct().filter { it in Decoder.priorityModes }
+  // HW+ is optional. Never append it back after the caller has filtered it out.
+  val normalized = (priority + listOf(Decoder.HW, Decoder.SW)).distinct().filter { it in Decoder.priorityModes }
   val enabled = normalized.takeWhile { it != Decoder.SW }
   return if (enabled.isEmpty()) Decoder.SW.value else (enabled.map(Decoder::value) + Decoder.SW.value).joinToString(",")
 }

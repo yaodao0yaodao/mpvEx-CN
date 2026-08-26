@@ -15,6 +15,7 @@ import app.marlboroadvance.mpvex.ui.player.PlayerActivity
 import app.marlboroadvance.mpvex.ui.player.Sheets
 import app.marlboroadvance.mpvex.ui.player.TrackNode
 import app.marlboroadvance.mpvex.ui.player.controls.components.sheets.AspectRatioSheet
+import app.marlboroadvance.mpvex.ui.player.controls.components.sheets.AiUpscaleSheet
 import app.marlboroadvance.mpvex.ui.player.controls.components.sheets.AudioTracksSheet
 import app.marlboroadvance.mpvex.ui.player.controls.components.sheets.ChaptersSheet
 import app.marlboroadvance.mpvex.ui.player.controls.components.sheets.DecodersSheet
@@ -233,14 +234,23 @@ fun PlayerSheets(
       )
     }
 
+    Sheets.AiUpscale -> {
+      val hardwarePlusMode by viewModel.hardwarePlusMode.collectAsState()
+      AiUpscaleSheet(
+        hardwarePlusMode = hardwarePlusMode,
+        onChanged = viewModel::refreshAiUpscale,
+        onDismissRequest = onDismissRequest,
+      )
+    }
+
     Sheets.More -> {
       val hardwarePlusMode by viewModel.hardwarePlusMode.collectAsState()
+      val runtimeProfile by viewModel.runtimeProfile.collectAsState()
       MoreSheet(
-        remainingTime = sleepTimerTimeRemaining,
-        onStartTimer = onStartSleepTimer,
+        currentProfile = runtimeProfile,
+        onProfileChanged = viewModel::applyRuntimeProfile,
+        onRendererSettingChanged = { playerActivity?.restartForRendererSettings() },
         onDismissRequest = onDismissRequest,
-        onEnterFiltersPanel = { onOpenPanel(Panels.VideoFilters) },
-        onAnime4KChanged = { playerActivity?.player?.applyAnime4KShaders() },
         hardwarePlusMode = hardwarePlusMode,
       )
     }
@@ -273,6 +283,7 @@ fun PlayerSheets(
       val playerPreferences = koinInject<app.marlboroadvance.mpvex.preferences.PlayerPreferences>()
       val customRatiosSet by playerPreferences.customAspectRatios.collectAsState()
       val currentRatio by viewModel.currentAspectRatio.composeCollectAsState()
+      val autoCropEnabled by viewModel.autoCropEnabled.composeCollectAsState()
       val customRatios =
         customRatiosSet.mapNotNull { str ->
           val parts = str.split("|")
@@ -289,6 +300,8 @@ fun PlayerSheets(
 
       AspectRatioSheet(
         currentRatio = currentRatio,
+        autoCropEnabled = autoCropEnabled,
+        onAutoCropChanged = viewModel::setAutoCropEnabled,
         customRatios = customRatios,
         onSelectRatio = { ratio ->
           if (ratio < 0) {

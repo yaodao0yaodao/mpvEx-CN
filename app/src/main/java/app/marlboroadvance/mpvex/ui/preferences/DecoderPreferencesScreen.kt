@@ -15,6 +15,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -64,6 +65,7 @@ object DecoderPreferencesScreen : Screen {
     val isVulkanSupported = remember { VulkanCapabilities.isDeviceSupported(context) }
     var showGpuNextWarning by remember { mutableStateOf(false) }
     var showDecoderPriorityDialog by remember { mutableStateOf(false) }
+    var showHardwarePlusWarning by remember { mutableStateOf(false) }
     Scaffold(
       topBar = {
         TopAppBar(
@@ -145,9 +147,6 @@ object DecoderPreferencesScreen : Screen {
                         showGpuNextWarning = true
                     } else {
                         preferences.gpuNext.set(enabled)
-                        if (enabled && !useVulkan) { // Only disable Anime4K if Vulkan is disabled
-                            preferences.enableAnime4K.set(false)
-                        }
                     }
                 },
                 title = { Text(stringResource(R.string.pref_decoder_gpu_next_title)) },
@@ -190,7 +189,6 @@ object DecoderPreferencesScreen : Screen {
                       confirmButton = {
                           Button(onClick = {
                               preferences.gpuNext.set(true)
-                              preferences.enableAnime4K.set(false) // Ensure Anime4K is disabled on confirmation
                               showGpuNextWarning = false
                           }) {
                               Text(stringResource(R.string.pref_decoder_gpu_next_enable_anyway))
@@ -211,15 +209,6 @@ object DecoderPreferencesScreen : Screen {
                 value = useVulkan,
                 onValueChange = { enabled ->
                   preferences.useVulkan.set(enabled)
-                  // When Vulkan is disabled, ensure Anime4K and GPU Next are not both enabled
-                  if (!enabled) {
-                    val anime4kEnabled = preferences.enableAnime4K.get()
-                    val gpuNextEnabled = preferences.gpuNext.get()
-                    if (anime4kEnabled && gpuNextEnabled) {
-                      // Disable GPU Next to keep Anime4K
-                      preferences.gpuNext.set(false)
-                    }
-                  }
                 },
                 enabled = isVulkanSupported,
                 title = { Text(stringResource(R.string.pref_decoder_vulkan_title) + " (Experimental)") },
@@ -283,40 +272,6 @@ object DecoderPreferencesScreen : Screen {
                 },
               )
 
-              PreferenceDivider()
-              
-              val enableAnime4K by preferences.enableAnime4K.collectAsState()
-              SwitchPreference(
-                value = enableAnime4K,
-                onValueChange = { enabled ->
-                    preferences.enableAnime4K.set(enabled)
-                    if (enabled && !useVulkan) { // Only disable GPU Next if Vulkan is disabled
-                        preferences.gpuNext.set(false)
-                    }
-                },
-                title = { Text(stringResource(R.string.pref_anime4k_title)) },
-                summary = {
-                  Column {
-                    Text(
-                      stringResource(R.string.pref_anime4k_summary),
-                      color = MaterialTheme.colorScheme.outline,
-                    )
-                    Text(
-                      text = stringResource(R.string.pref_anime4k_guide_link),
-                      color = MaterialTheme.colorScheme.primary,
-                      style = MaterialTheme.typography.bodySmall,
-                      textDecoration = TextDecoration.Underline,
-                      modifier = Modifier.clickable {
-                        val intent = Intent(
-                          Intent.ACTION_VIEW,
-                          Uri.parse("https://github.com/yaodao0yaodao/mpvEx-CN/blob/master/docs/Anime4K.zh-CN.md"),
-                        )
-                        context.startActivity(intent)
-                      }
-                    )
-                  }
-                },
-              )
             }
           }
         }
@@ -325,6 +280,7 @@ object DecoderPreferencesScreen : Screen {
 
     if (showDecoderPriorityDialog) {
       val priority by preferences.decoderPriority.collectAsState()
+      val hardwarePlusEnabled by preferences.hardwarePlusEnabled.collectAsState()
       AlertDialog(
         onDismissRequest = { showDecoderPriorityDialog = false },
         title = { Text(stringResource(R.string.pref_decoder_priority_title)) },
@@ -346,6 +302,18 @@ object DecoderPreferencesScreen : Screen {
                   style = MaterialTheme.typography.bodyLarge,
                   modifier = Modifier.weight(1f).padding(vertical = 8.dp),
                 )
+                if (decoder == Decoder.HWPlus) {
+                  Checkbox(
+                    checked = hardwarePlusEnabled,
+                    onCheckedChange = { enabled ->
+                      if (enabled) {
+                        showHardwarePlusWarning = true
+                      } else {
+                        preferences.hardwarePlusEnabled.set(false)
+                      }
+                    },
+                  )
+                }
                 IconButton(
                   onClick = {
                     val updated = priority.toMutableList()
@@ -375,6 +343,50 @@ object DecoderPreferencesScreen : Screen {
         confirmButton = {
           TextButton(onClick = { showDecoderPriorityDialog = false }) {
             Text(stringResource(R.string.generic_ok))
+          }
+        },
+      )
+    }
+
+    if (showHardwarePlusWarning) {
+      AlertDialog(
+        onDismissRequest = { showHardwarePlusWarning = false },
+        title = { Text(stringResource(R.string.pref_decoder_hwplus_enable_title)) },
+        text = {
+          Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(stringResource(R.string.pref_decoder_hwplus_warning))
+            Surface(
+              color = MaterialTheme.colorScheme.errorContainer,
+              shape = MaterialTheme.shapes.small,
+            ) {
+              Column(modifier = Modifier.padding(12.dp)) {
+                Text(
+                  stringResource(R.string.pref_decoder_hwplus_incompatible_title),
+                  style = MaterialTheme.typography.titleSmall,
+                  color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+                Text(
+                  stringResource(R.string.pref_decoder_hwplus_incompatible_body),
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+              }
+            }
+          }
+        },
+        confirmButton = {
+          Button(
+            onClick = {
+              preferences.hardwarePlusEnabled.set(true)
+              showHardwarePlusWarning = false
+            },
+          ) {
+            Text(stringResource(R.string.pref_decoder_hwplus_enable_anyway))
+          }
+        },
+        dismissButton = {
+          TextButton(onClick = { showHardwarePlusWarning = false }) {
+            Text(stringResource(R.string.generic_cancel))
           }
         },
       )

@@ -153,13 +153,6 @@ object SearchablePreferences {
                 screen = PlayerPreferencesScreen,
             ))
             add(SearchablePreference(
-                titleRes = R.string.pref_autoplay_title,
-                summaryRes = R.string.pref_autoplay_summary,
-                keywords = listOf("autoplay", "playlist", "next", "previous", "folder", "navigation"),
-                category = "Player",
-                screen = PlayerPreferencesScreen,
-            ))
-            add(SearchablePreference(
                 titleRes = R.string.pref_autoplay_next_video_title,
                 summaryRes = R.string.pref_autoplay_next_video_summary,
                 keywords = listOf("autoplay", "next", "video", "auto", "advance", "continuous"),
@@ -170,12 +163,6 @@ object SearchablePreferences {
                 titleRes = R.string.pref_auto_pip_title,
                 summaryRes = R.string.pref_auto_pip_summary,
                 keywords = listOf("pip", "picture", "auto", "navigation", "home", "back"),
-                category = "Player",
-                screen = PlayerPreferencesScreen,
-            ))
-            add(SearchablePreference(
-                titleRes = R.string.show_splash_ovals_on_double_tap_to_seek,
-                keywords = listOf("oval", "circle", "double tap", "seek", "visual", "feedback"),
                 category = "Player",
                 screen = PlayerPreferencesScreen,
             ))
@@ -395,13 +382,6 @@ object SearchablePreferences {
                 category = "Decoder",
                 screen = DecoderPreferencesScreen,
             ))
-            add(SearchablePreference(
-                titleRes = R.string.pref_anime4k_title,
-                summaryRes = R.string.pref_anime4k_summary,
-                keywords = listOf("anime4k", "upscale", "shader", "anime", "upscale"),
-                category = "Decoder",
-                screen = DecoderPreferencesScreen,
-            ))
 
             // Subtitle preferences
             add(SearchablePreference(
@@ -463,13 +443,6 @@ object SearchablePreferences {
             add(SearchablePreference(
                 titleRes = R.string.pref_preferred_languages,
                 keywords = listOf("language", "preferred", "subtitle", "audio", "locale", "code"),
-                category = "Audio",
-                screen = AudioPreferencesScreen,
-            ))
-            add(SearchablePreference(
-                titleRes = R.string.pref_audio_pitch_correction_title,
-                summaryRes = R.string.pref_audio_pitch_correction_summary,
-                keywords = listOf("pitch", "correction", "speed", "audio", "sound"),
                 category = "Audio",
                 screen = AudioPreferencesScreen,
             ))

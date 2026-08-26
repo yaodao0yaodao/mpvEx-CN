@@ -21,6 +21,7 @@ import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,6 +46,8 @@ data class AspectRatio(
 @Composable
 fun AspectRatioSheet(
   currentRatio: Double?,
+  autoCropEnabled: Boolean,
+  onAutoCropChanged: (Boolean) -> Unit,
   customRatios: List<AspectRatio>,
   onSelectRatio: (Double) -> Unit,
   onAddCustomRatio: (String, Double) -> Unit,
@@ -80,6 +83,26 @@ fun AspectRatioSheet(
             .padding(horizontal = MaterialTheme.spacing.medium)
             .padding(bottom = MaterialTheme.spacing.small),
       )
+
+      Row(
+        modifier =
+          Modifier
+            .fillMaxWidth()
+            .clickable { onAutoCropChanged(!autoCropEnabled) }
+            .padding(horizontal = MaterialTheme.spacing.medium, vertical = MaterialTheme.spacing.small),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+      ) {
+        Column(modifier = Modifier.weight(1f)) {
+          Text("自动剪切黑边", style = MaterialTheme.typography.titleMedium)
+          Text(
+            "稳定检测后保守裁切，并为硬字幕保留下方安全区域",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+          )
+        }
+        Switch(checked = autoCropEnabled, onCheckedChange = onAutoCropChanged)
+      }
 
       // Preset ratios
       Text(

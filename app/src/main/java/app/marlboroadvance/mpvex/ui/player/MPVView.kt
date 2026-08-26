@@ -23,6 +23,11 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import kotlin.reflect.KProperty
 
+private data class Anime4KSelection(
+  val mode: Anime4KManager.Mode,
+  val quality: Anime4KManager.Quality,
+)
+
 class MPVView(
   context: Context,
   attributes: AttributeSet,
@@ -35,10 +40,9 @@ class MPVView(
   private val subtitlesPreferences: SubtitlesPreferences by inject()
   private val anime4kManager: Anime4KManager by inject()
   private val hdrToysManager: HdrToysManager by inject()
-  private val anime4kSafetyController = Anime4KSafetyController()
-  private val framePressureTracker = FramePressureTracker()
   private var appliedShaderChain: String? = null
   private var hardwarePlusHdrShaderPaths: List<String> = emptyList()
+  private var runtimeAnime4KSuppressed = false
 
   var isExiting = false
   var decoderOverride: Decoder? = null
@@ -108,11 +112,15 @@ class MPVView(
     isExiting = false
     appliedShaderChain = null
     hardwarePlusHdrShaderPaths = emptyList()
-    val profile = decoderPreferences.profile.get()
-    MPVLib.setOptionString("profile", profile)
-    val priority = decoderPreferences.decoderPriority.get()
-    activeDecoder = decoderOverride ?: priority.firstOrNull() ?: Decoder.HWPlus
+    val priority = decoderPreferences.effectiveDecoderPriority()
+    val allowedOverride =
+      decoderOverride?.takeIf { it != Decoder.HWPlus || decoderPreferences.hardwarePlusEnabled.get() }
+    activeDecoder = allowedOverride ?: priority.firstOrNull() ?: Decoder.HW
     val hardwarePlusMode = activeDecoder == Decoder.HWPlus
+    val runtimeProfile =
+      if (activeDecoder == Decoder.SW || hardwarePlusMode) MPVProfile.Fast.value
+      else MPVProfile.fromValue(decoderPreferences.profile.get()).value
+    MPVLib.setOptionString("profile", runtimeProfile)
     val linearHdrSupported = VulkanCapabilities.isDeviceSupported(context)
     val anime4kActive =
       !hardwarePlusMode && decoderPreferences.enableAnime4K.get() && decoderPreferences.anime4kMode.get() != "OFF"
@@ -146,7 +154,7 @@ class MPVView(
     MPVLib.setOptionString(
       "hwdec",
       initialHwdecValue(
-        selectedDecoder = decoderOverride,
+        selectedDecoder = allowedOverride,
         decoderPriority = priority,
       ),
     )
@@ -234,9 +242,11 @@ class MPVView(
     }
 
     advancedPreferences.enabledStatisticsPage.get().let {
-      if (it != 0) {
+      if (it in 1..5) {
         MPVLib.command("script-binding", "stats/display-stats-toggle")
         MPVLib.command("script-binding", "stats/display-page-$it")
+      } else if (it == 7) {
+        MPVLib.command("script-message-to", "console", "enable")
       }
     }
   }
@@ -288,6 +298,7 @@ class MPVView(
       "video-params/gamma" to MPVLib.MpvFormat.MPV_FORMAT_STRING,
       "video-params/primaries" to MPVLib.MpvFormat.MPV_FORMAT_STRING,
       "video-params/sig-peak" to MPVLib.MpvFormat.MPV_FORMAT_DOUBLE,
+      "hwdec-current" to MPVLib.MpvFormat.MPV_FORMAT_STRING,
       "eof-reached" to MPVLib.MpvFormat.MPV_FORMAT_FLAG,
       "user-data/mpvex/show_text" to MPVLib.MpvFormat.MPV_FORMAT_STRING,
       "user-data/mpvex/toggle_ui" to MPVLib.MpvFormat.MPV_FORMAT_STRING,
@@ -307,7 +318,7 @@ class MPVView(
     // App will handle track selection manually via TrackSelector to respect user choices
     MPVLib.setOptionString("alang", "")
     MPVLib.setOptionString("audio-delay", (audioPreferences.defaultAudioDelay.get() / 1000.0).toString())
-    MPVLib.setOptionString("audio-pitch-correction", audioPreferences.audioPitchCorrection.get().toString())
+    MPVLib.setOptionString("audio-pitch-correction", "yes")
     MPVLib.setOptionString("volume-max", (audioPreferences.volumeBoostCap.get() + 100).toString())
     
     // Volume normalization using dynamic audio normalization filter
@@ -417,45 +428,16 @@ class MPVView(
     applyShaderStack(backend, runtime = true)
   }
 
-  fun resetAnime4KSafety() {
-    anime4kSafetyController.reset()
-    framePressureTracker.reset()
+  fun setRuntimeAnime4KSuppressed(suppressed: Boolean) {
+    if (runtimeAnime4KSuppressed == suppressed) return
+    runtimeAnime4KSuppressed = suppressed
+    applyAnime4KShaders()
   }
 
   fun isAnime4KConfigured(): Boolean =
     activeDecoder != Decoder.HWPlus &&
       decoderPreferences.enableAnime4K.get() &&
       decoderPreferences.anime4kMode.get() != Anime4KManager.Mode.OFF.name
-
-  fun refreshAnime4KSafety(thermalPressure: ThermalPressure) {
-    if (!isAnime4KConfigured()) return
-    val highResolution = isCurrentVideoHighResolution()
-    val previousLevel = anime4kSafetyController.level
-    val preferredSelection = preferredAnime4KSelection()
-    val previousSelection =
-      effectiveAnime4KSelection(
-        preferredSelection,
-        if (highResolution) Anime4KGuardLevel.DISABLED else previousLevel,
-      )
-    val framePressure = framePressureTracker.sample(readFrameCounters())
-    val currentLevel =
-      anime4kSafetyController.update(
-        highResolution = highResolution,
-        thermalPressure = thermalPressure,
-        framePressure = framePressure,
-      )
-    if (currentLevel != previousLevel) {
-      Log.i(TAG, "Anime4K safety level changed: $previousLevel -> $currentLevel")
-    }
-    val currentSelection =
-      effectiveAnime4KSelection(
-        preferredSelection,
-        if (highResolution) Anime4KGuardLevel.DISABLED else currentLevel,
-      )
-    if (currentSelection != previousSelection) {
-      applyAnime4KShaders()
-    }
-  }
 
   private fun applyShaderStack(
     backend: RendererBackend,
@@ -496,14 +478,16 @@ class MPVView(
   }
 
   private fun anime4kShaderPaths(backend: RendererBackend): List<String> {
-    if (activeDecoder == Decoder.HWPlus) return emptyList()
+    if (activeDecoder == Decoder.HWPlus || runtimeAnime4KSuppressed) return emptyList()
     if (!decoderPreferences.enableAnime4K.get()) return emptyList()
     if (backend.videoOutput == "gpu-next" && backend.gpuApi != "vulkan") return emptyList()
     if (!anime4kManager.initialize()) return emptyList()
+    if (!hasAnime4KUpscaleHeadroom()) {
+      Log.i(TAG, "Anime4K temporarily disabled: displayed image is below the 1.2x upscale threshold")
+      return emptyList()
+    }
 
-    val guardLevel =
-      if (isCurrentVideoHighResolution()) Anime4KGuardLevel.DISABLED else anime4kSafetyController.level
-    val selection = effectiveAnime4KSelection(preferredAnime4KSelection(), guardLevel)
+    val selection = preferredAnime4KSelection()
     if (selection.mode == Anime4KManager.Mode.OFF) return emptyList()
     val shaderChain = anime4kManager.getShaderChain(selection.mode, selection.quality)
     if (shaderChain.isEmpty()) return emptyList()
@@ -526,18 +510,34 @@ class MPVView(
           .getOrDefault(Anime4KManager.Quality.BALANCED),
     )
 
-  private fun isCurrentVideoHighResolution(): Boolean =
-    isAnime4KHighResolution(
-      width = MPVLib.getPropertyInt("video-params/w") ?: 0,
-      height = MPVLib.getPropertyInt("video-params/h") ?: 0,
-    )
+  private fun hasAnime4KUpscaleHeadroom(): Boolean {
+    val inputWidth =
+      (MPVLib.getPropertyInt("video-out-params/w")
+        ?: MPVLib.getPropertyInt("video-params/w")
+        ?: 0).toFloat()
+    val inputHeight =
+      (MPVLib.getPropertyInt("video-out-params/h")
+        ?: MPVLib.getPropertyInt("video-params/h")
+        ?: 0).toFloat()
+    if (inputWidth <= 0f || inputHeight <= 0f) return true
 
-  private fun readFrameCounters(): FrameCounters =
-    FrameCounters(
-      dropped =
-        (MPVLib.getPropertyInt("frame-drop-count") ?: 0) +
-          (MPVLib.getPropertyInt("decoder-frame-drop-count") ?: 0),
-      delayed = MPVLib.getPropertyInt("vo-delayed-frame-count") ?: 0,
-      mistimed = MPVLib.getPropertyInt("mistimed-frame-count") ?: 0,
-    )
+    val screenWidth = resources.displayMetrics.widthPixels.toFloat()
+    val screenHeight = resources.displayMetrics.heightPixels.toFloat()
+    val widthScale = screenWidth / inputWidth
+    val heightScale = screenHeight / inputHeight
+    val (outputWidthScale, outputHeightScale) =
+      when (playerPreferences.defaultVideoAspect.get()) {
+        VideoAspect.Fit -> {
+          val uniform = minOf(widthScale, heightScale)
+          uniform to uniform
+        }
+        VideoAspect.Crop -> {
+          val uniform = maxOf(widthScale, heightScale)
+          uniform to uniform
+        }
+        VideoAspect.Stretch -> widthScale to heightScale
+      }
+    return outputWidthScale >= 1.2f || outputHeightScale >= 1.2f
+  }
+
 }

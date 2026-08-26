@@ -13,6 +13,7 @@ class Anime4KManager(private val context: Context) {
 
   companion object {
     private const val SHADER_DIR = "shaders"
+    private const val SHADER_BUNDLE_VERSION = "artcnn-1.6.2-anisd-2026-06"
   }
 
   // Shader quality levels
@@ -28,10 +29,17 @@ class Anime4KManager(private val context: Context) {
     A(app.marlboroadvance.mpvex.R.string.anime4k_mode_a),
     B(app.marlboroadvance.mpvex.R.string.anime4k_mode_b),
     C(app.marlboroadvance.mpvex.R.string.anime4k_mode_c),
-    A_PLUS(app.marlboroadvance.mpvex.R.string.anime4k_mode_a_plus),
-    B_PLUS(app.marlboroadvance.mpvex.R.string.anime4k_mode_b_plus),
     C_PLUS(app.marlboroadvance.mpvex.R.string.anime4k_mode_c_plus),
-    ARTCNN(app.marlboroadvance.mpvex.R.string.anime4k_mode_artcnn),
+    ARTCNN_C4F32(app.marlboroadvance.mpvex.R.string.artcnn_mode_c4f32),
+    ARTCNN_C4F32_DN(app.marlboroadvance.mpvex.R.string.artcnn_mode_c4f32_dn),
+    ARTCNN_C4F32_DS(app.marlboroadvance.mpvex.R.string.artcnn_mode_c4f32_ds),
+    ANISD_ARTCNN_C4F32(app.marlboroadvance.mpvex.R.string.artcnn_mode_anisd),
+    ANISD_ARTCNN_C4F32_CMP(app.marlboroadvance.mpvex.R.string.artcnn_mode_anisd_cmp),
+    ANI4KV2_ARTCNN_C4F32_CMP(app.marlboroadvance.mpvex.R.string.artcnn_mode_ani4kv2_cmp),
+    ;
+
+    val usesAnime4KQuality: Boolean
+      get() = this == A || this == B || this == C || this == C_PLUS
   }
 
   private var shaderDir: File? = null
@@ -56,14 +64,18 @@ class Anime4KManager(private val context: Context) {
         }
       }
 
+      val versionFile = File(shaderDir, ".bundle-version")
+      val forceRefresh = versionFile.readTextOrNull() != SHADER_BUNDLE_VERSION
+
       // List and copy all shader files from assets
       val shaderFiles = context.assets.list(SHADER_DIR) ?: emptyArray()
 
       for (fileName in shaderFiles) {
         if (fileName.endsWith(".glsl")) {
-          copyShaderFromAssets(fileName)
+          copyShaderFromAssets(fileName, forceRefresh)
         }
       }
+      if (forceRefresh) versionFile.writeText(SHADER_BUNDLE_VERSION)
       
       isInitialized = true
       true
@@ -73,11 +85,11 @@ class Anime4KManager(private val context: Context) {
     }
   }
 
-  private fun copyShaderFromAssets(fileName: String): Boolean {
+  private fun copyShaderFromAssets(fileName: String, force: Boolean): Boolean {
     val destFile = File(shaderDir, fileName)
     
     // Skip if file already exists and is valid
-    if (destFile.exists() && destFile.length() > 0) {
+    if (!force && destFile.exists() && destFile.length() > 0) {
       return false
     }
 
@@ -138,22 +150,6 @@ class Anime4KManager(private val context: Context) {
         shaders.add(getShaderPath("Anime4K_AutoDownscalePre_x2.glsl"))
         shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$q.glsl"))
       }
-      Mode.A_PLUS -> {
-        // Mode A+A: Restore -> Upscale -> Restore -> Upscale
-        shaders.add(getShaderPath("Anime4K_Restore_CNN_$q.glsl"))
-        shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$q.glsl"))
-        shaders.add(getShaderPath("Anime4K_AutoDownscalePre_x2.glsl"))
-        shaders.add(getShaderPath("Anime4K_Restore_CNN_$q.glsl"))
-        shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$q.glsl"))
-      }
-      Mode.B_PLUS -> {
-        // Mode B+B: Restore_Soft -> Upscale -> Restore_Soft -> Upscale
-        shaders.add(getShaderPath("Anime4K_Restore_CNN_Soft_$q.glsl"))
-        shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$q.glsl"))
-        shaders.add(getShaderPath("Anime4K_AutoDownscalePre_x2.glsl"))
-        shaders.add(getShaderPath("Anime4K_Restore_CNN_Soft_$q.glsl"))
-        shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$q.glsl"))
-      }
       Mode.C_PLUS -> {
         // Mode C+A: Upscale_Denoise -> Restore -> Upscale
         shaders.add(getShaderPath("Anime4K_Upscale_Denoise_CNN_x2_$q.glsl"))
@@ -161,9 +157,12 @@ class Anime4KManager(private val context: Context) {
         shaders.add(getShaderPath("Anime4K_Restore_CNN_$q.glsl"))
         shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$q.glsl"))
       }
-      Mode.ARTCNN -> {
-        shaders.add(getShaderPath("Ani4Kv2_ArtCNN_C4F32_i2_CMP.glsl"))
-      }
+      Mode.ARTCNN_C4F32 -> shaders.add(getShaderPath("ArtCNN_C4F32.glsl"))
+      Mode.ARTCNN_C4F32_DN -> shaders.add(getShaderPath("ArtCNN_C4F32_DN.glsl"))
+      Mode.ARTCNN_C4F32_DS -> shaders.add(getShaderPath("ArtCNN_C4F32_DS.glsl"))
+      Mode.ANISD_ARTCNN_C4F32 -> shaders.add(getShaderPath("AniSD_ArtCNN_C4F32_i4.glsl"))
+      Mode.ANISD_ARTCNN_C4F32_CMP -> shaders.add(getShaderPath("AniSD_ArtCNN_C4F32_i4_CMP.glsl"))
+      Mode.ANI4KV2_ARTCNN_C4F32_CMP -> shaders.add(getShaderPath("Ani4Kv2_ArtCNN_C4F32_i2_CMP.glsl"))
       Mode.OFF -> {
         // Already handled
       }
@@ -186,4 +185,6 @@ class Anime4KManager(private val context: Context) {
   private fun getShaderPath(fileName: String): String {
     return File(shaderDir, fileName).absolutePath
   }
+
+  private fun File.readTextOrNull(): String? = runCatching { readText() }.getOrNull()
 }

@@ -3,10 +3,12 @@ package app.marlboroadvance.mpvex.ui.player
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.graphics.Bitmap
 import android.media.AudioManager
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.provider.Settings
+import android.os.SystemClock
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.inputmethod.InputMethodManager
@@ -27,6 +29,7 @@ import app.marlboroadvance.mpvex.repository.wyzie.WyzieSubtitle
 import app.marlboroadvance.mpvex.utils.media.ChecksumUtils
 import app.marlboroadvance.mpvex.utils.media.MediaInfoParser
 import `is`.xyz.mpv.MPVLib
+import `is`.xyz.mpv.FastThumbnails
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CoroutineScope
@@ -56,6 +59,7 @@ import androidx.documentfile.provider.DocumentFile
 import app.marlboroadvance.mpvex.preferences.AdvancedPreferences
 import kotlin.properties.ReadOnlyProperty
 import kotlin.reflect.KProperty
+import kotlin.math.roundToInt
 
 
 enum class RepeatMode {
@@ -171,6 +175,71 @@ class PlayerViewModel(
   private val _preciseDuration = MutableStateFlow(0f)
   val preciseDuration = _preciseDuration.asStateFlow()
 
+  data class SeekThumbnailPreview(
+    val visible: Boolean = false,
+    val positionSeconds: Float = 0f,
+    val bitmap: Bitmap? = null,
+    val isLoading: Boolean = false,
+  )
+
+  private val _seekThumbnailPreview = MutableStateFlow(SeekThumbnailPreview())
+  val seekThumbnailPreview: StateFlow<SeekThumbnailPreview> = _seekThumbnailPreview.asStateFlow()
+  private val seekThumbnailCache = object : android.util.LruCache<String, Bitmap>(24) {}
+  private var seekThumbnailJob: Job? = null
+  private var seekThumbnailRequestId = 0L
+
+  fun updateSeekThumbnailPreview(positionSeconds: Float, durationSeconds: Float) {
+    val position = positionSeconds.coerceIn(0f, durationSeconds.coerceAtLeast(0f))
+    val source =
+      sequenceOf("stream-open-filename", "path")
+        .mapNotNull { property -> runCatching { MPVLib.getPropertyString(property) }.getOrNull() }
+        .firstOrNull { candidate ->
+          candidate.isNotBlank() &&
+            !candidate.startsWith("fd://") &&
+            !candidate.startsWith("edl://")
+        }
+    val bucket = (position / 2f).roundToInt()
+    val cacheKey = "${source.orEmpty()}#$bucket"
+    val cached = seekThumbnailCache.get(cacheKey)
+    _seekThumbnailPreview.value =
+      SeekThumbnailPreview(
+        visible = true,
+        positionSeconds = position,
+        bitmap = cached ?: _seekThumbnailPreview.value.bitmap,
+        isLoading = source != null && cached == null,
+      )
+    if (source == null || cached != null) return
+
+    val requestId = ++seekThumbnailRequestId
+    seekThumbnailJob?.cancel()
+    seekThumbnailJob =
+      viewModelScope.launch(Dispatchers.IO) {
+        delay(45)
+        val bitmap =
+          runCatching {
+            FastThumbnails.generateAsync(
+              source,
+              (bucket * 2f).coerceAtMost(durationSeconds).toDouble(),
+              480,
+              useHwDec = true,
+            )
+          }.getOrNull()
+        if (bitmap != null) seekThumbnailCache.put(cacheKey, bitmap)
+        if (requestId == seekThumbnailRequestId) {
+          _seekThumbnailPreview.update { current ->
+            current.copy(bitmap = bitmap ?: current.bitmap, isLoading = false)
+          }
+        }
+      }
+  }
+
+  fun hideSeekThumbnailPreview() {
+    seekThumbnailRequestId++
+    seekThumbnailJob?.cancel()
+    seekThumbnailJob = null
+    _seekThumbnailPreview.update { it.copy(visible = false, bitmap = null, isLoading = false) }
+  }
+
   private val _controlsShown = MutableStateFlow(false)
   val controlsShown: StateFlow<Boolean> = _controlsShown.asStateFlow()
 
@@ -195,6 +264,26 @@ class PlayerViewModel(
   private val _sdrHdrBoostEnabled = MutableStateFlow(decoderPreferences.boostSdrToHdr.get())
   val sdrHdrBoostEnabled: StateFlow<Boolean> = _sdrHdrBoostEnabled.asStateFlow()
   private var appliedSdrHdrBoost = false
+  private data class AutomaticRuntimeBaseline(
+    var speed: Double,
+    var profile: MPVProfile,
+  )
+  private var automaticRuntimeBaseline: AutomaticRuntimeBaseline? = null
+  private var automaticStage = 0
+  private var lowFpsSinceMs: Long? = null
+  private var lastAutoSpeed: Double? = null
+  private var automaticAnimeSuppressed = false
+  private var automaticBrightnessMemorySuppressed = false
+  private var automaticHdrSuppressed = false
+  private val _runtimeProfile =
+    MutableStateFlow(
+      if (host.activeDecoder == Decoder.SW || host.activeDecoder == Decoder.HWPlus) MPVProfile.Fast
+      else MPVProfile.fromValue(decoderPreferences.profile.get()),
+    )
+  val runtimeProfile: StateFlow<MPVProfile> = _runtimeProfile.asStateFlow()
+  private var previousEstimatedFrame: Int? = null
+  private var previousDroppedFrames: Int? = null
+  private var previousFrameSampleMs: Long? = null
 
   init {
     // Keep the seek bar smooth while it is visible, then back off JNI polling when the
@@ -217,6 +306,13 @@ class PlayerViewModel(
         if (dur != null && dur > 0) {
             _preciseDuration.value = dur.toFloat()
         }
+      }
+    }
+
+    viewModelScope.launch(Dispatchers.IO) {
+      while (isActive) {
+        sampleAutomaticControl()
+        delay(500)
       }
     }
   }
@@ -294,6 +390,10 @@ class PlayerViewModel(
   // Video aspect ratio (now persisted via preferences)
   private val _videoAspect = MutableStateFlow(playerPreferences.defaultVideoAspect.get())
   val videoAspect: StateFlow<VideoAspect> = _videoAspect.asStateFlow()
+  private val _autoCropEnabled = MutableStateFlow(false)
+  val autoCropEnabled: StateFlow<Boolean> = _autoCropEnabled.asStateFlow()
+  private var autoCropJob: Job? = null
+  private var appliedAutoCrop: String? = null
 
   // Current aspect ratio value (for custom ratios and tracking)
   private val _currentAspectRatio = MutableStateFlow(playerPreferences.defaultCustomAspectRatio.get())
@@ -1035,7 +1135,7 @@ class PlayerViewModel(
     currentBrightness.value = coercedBrightness
 
     // Save brightness to preferences if enabled
-    if (playerPreferences.rememberBrightness.get()) {
+    if (shouldPersistBrightness()) {
       playerPreferences.defaultBrightness.set(coercedBrightness)
     }
   }
@@ -1147,6 +1247,76 @@ class PlayerViewModel(
     _currentAspectRatio.value = ratio
     playerPreferences.defaultCustomAspectRatio.set(ratio)
     playerUpdate.value = PlayerUpdates.AspectRatio
+  }
+
+  fun setAutoCropEnabled(enabled: Boolean) {
+    if (_autoCropEnabled.value == enabled) return
+    _autoCropEnabled.value = enabled
+    if (enabled) startAutoCropDetection() else stopAutoCropDetection(removeCrop = true)
+  }
+
+  private fun startAutoCropDetection() {
+    stopAutoCropDetection(removeCrop = true)
+    MPVLib.command("vf", "add", "@mpvex_cropdetect:lavfi=[cropdetect=limit=0.094:round=2:reset=0]")
+    autoCropJob =
+      viewModelScope.launch(Dispatchers.IO) {
+        var stableCandidate: String? = null
+        var stableSamples = 0
+        repeat(60) {
+          delay(500)
+          if (!_autoCropEnabled.value || appliedAutoCrop != null) return@launch
+          val sourceWidth = MPVLib.getPropertyInt("video-params/w") ?: return@repeat
+          val sourceHeight = MPVLib.getPropertyInt("video-params/h") ?: return@repeat
+          val detectedWidth = MPVLib.getPropertyInt("vf-metadata/mpvex_cropdetect/lavfi.cropdetect.w") ?: return@repeat
+          val detectedHeight = MPVLib.getPropertyInt("vf-metadata/mpvex_cropdetect/lavfi.cropdetect.h") ?: return@repeat
+          val detectedX = MPVLib.getPropertyInt("vf-metadata/mpvex_cropdetect/lavfi.cropdetect.x") ?: return@repeat
+          val detectedY = MPVLib.getPropertyInt("vf-metadata/mpvex_cropdetect/lavfi.cropdetect.y") ?: return@repeat
+
+          val leftCrop = detectedX.coerceAtLeast(0)
+          val topCrop = detectedY.coerceAtLeast(0)
+          val rightCrop = (sourceWidth - detectedX - detectedWidth).coerceAtLeast(0)
+          val detectedBottomCrop = (sourceHeight - detectedY - detectedHeight).coerceAtLeast(0)
+          val protectedBottom = (sourceHeight * 0.06f).roundToInt()
+          val bottomCrop = (detectedBottomCrop - protectedBottom).coerceAtLeast(0)
+          val cropWidth = (sourceWidth - leftCrop - rightCrop).coerceAtLeast(2)
+          val cropHeight = (sourceHeight - topCrop - bottomCrop).coerceAtLeast(2)
+          val removedFraction = 1f - (cropWidth.toFloat() * cropHeight / (sourceWidth.toFloat() * sourceHeight))
+          if (removedFraction < 0.04f) return@repeat
+
+          val candidate = "$cropWidth:$cropHeight:$leftCrop:$topCrop"
+          if (candidate == stableCandidate) {
+            stableSamples++
+          } else {
+            stableCandidate = candidate
+            stableSamples = 1
+          }
+          if (stableSamples >= 12) {
+            appliedAutoCrop = candidate
+            MPVLib.command("vf", "add", "@mpvex_autocrop:crop=$candidate")
+            Log.i(TAG, "Applied stable subtitle-safe auto crop: $candidate")
+            applyCurrentAspectAfterAutoCrop()
+            return@launch
+          }
+        }
+      }
+  }
+
+  private fun applyCurrentAspectAfterAutoCrop() {
+    val custom = _currentAspectRatio.value
+    if (custom > 0.0) setCustomAspectRatio(custom) else changeVideoAspect(_videoAspect.value, showUpdate = false)
+    (host as? PlayerActivity)?.player?.applyAnime4KShaders()
+  }
+
+  fun refreshAiUpscale() {
+    (host as? PlayerActivity)?.player?.applyAnime4KShaders()
+  }
+
+  private fun stopAutoCropDetection(removeCrop: Boolean) {
+    autoCropJob?.cancel()
+    autoCropJob = null
+    MPVLib.command("vf", "remove", "@mpvex_cropdetect")
+    if (removeCrop) MPVLib.command("vf", "remove", "@mpvex_autocrop")
+    appliedAutoCrop = null
   }
 
   // ==================== Screen Rotation ====================
@@ -1927,7 +2097,189 @@ class PlayerViewModel(
     Toast.makeText(host.context, message, Toast.LENGTH_SHORT).show()
   }
 
+  private fun sampleAutomaticControl() {
+    val pausedNow = MPVLib.getPropertyBoolean("pause") == true
+    val seekingNow = MPVLib.getPropertyBoolean("seeking") == true
+    val bufferingNow = MPVLib.getPropertyBoolean("paused-for-cache") == true
+    val sourceFps =
+      (MPVLib.getPropertyDouble("container-fps")
+        ?: MPVLib.getPropertyDouble("estimated-vf-fps"))
+        ?.takeIf { it.isFinite() && it > 1.0 }
+    if (pausedNow || seekingNow || bufferingNow || _seekThumbnailPreview.value.visible || sourceFps == null) {
+      resetLowFpsObservation()
+      return
+    }
+
+    val now = SystemClock.elapsedRealtime()
+    val speed = (MPVLib.getPropertyDouble("speed") ?: 1.0).coerceAtLeast(0.1)
+    automaticRuntimeBaseline?.let { baseline ->
+      val autoSpeed = lastAutoSpeed
+      if (autoSpeed != null && kotlin.math.abs(speed - autoSpeed) > 0.001) {
+        baseline.speed = speed
+        lastAutoSpeed = null
+      }
+    }
+
+    val expectedRenderFps = sourceFps * speed
+    // estimated-vf-fps is the stream/filter cadence, not measured presentation FPS.
+    // Measure progress of mpv's generic frame counter against monotonic wall time instead;
+    // this works independently of HEVC/H.264/AV1 and naturally includes playback speed.
+    val frameNumber = MPVLib.getPropertyInt("estimated-frame-number")
+    val droppedFrames =
+      (MPVLib.getPropertyInt("frame-drop-count") ?: 0) +
+        (MPVLib.getPropertyInt("decoder-frame-drop-count") ?: 0)
+    val previousFrame = previousEstimatedFrame
+    val previousTime = previousFrameSampleMs
+    val previousDropped = previousDroppedFrames
+    previousEstimatedFrame = frameNumber
+    previousDroppedFrames = droppedFrames
+    previousFrameSampleMs = now
+    if (frameNumber == null || previousFrame == null || previousTime == null || frameNumber < previousFrame) {
+      lowFpsSinceMs = null
+      return
+    }
+    val elapsedSeconds = (now - previousTime).coerceAtLeast(1L) / 1000.0
+    val advancedFrames = (frameNumber - previousFrame).coerceAtLeast(0)
+    val newlyDropped = (droppedFrames - (previousDropped ?: droppedFrames)).coerceAtLeast(0)
+    val renderFps = (advancedFrames - newlyDropped).coerceAtLeast(0) / elapsedSeconds
+    if (renderFps >= expectedRenderFps * 0.95) {
+      lowFpsSinceMs = null
+      return
+    }
+
+    val started = lowFpsSinceMs ?: now.also { lowFpsSinceMs = it }
+    if (now - started < 10_000L) return
+    applyNextAutomaticDowngrade()
+    lowFpsSinceMs = null
+  }
+
+  private fun resetLowFpsObservation() {
+    lowFpsSinceMs = null
+    previousEstimatedFrame = null
+    previousDroppedFrames = null
+    previousFrameSampleMs = null
+  }
+
+  private fun ensureAutomaticBaseline() {
+    if (automaticRuntimeBaseline != null) return
+    automaticRuntimeBaseline =
+      AutomaticRuntimeBaseline(
+        speed = MPVLib.getPropertyDouble("speed") ?: 1.0,
+        profile = _runtimeProfile.value,
+      )
+  }
+
+  private fun applyNextAutomaticDowngrade() {
+    while (automaticStage <= 5) {
+      ensureAutomaticBaseline()
+      when (automaticStage) {
+        0 -> {
+          automaticStage++
+          val speed = MPVLib.getPropertyDouble("speed") ?: 1.0
+          if (kotlin.math.abs(speed - 1.0) > 0.001) {
+            MPVLib.setPropertyDouble("speed", 1.0)
+            lastAutoSpeed = 1.0
+            logAutomaticAdjustment("倍速恢复为 1.0x")
+            return
+          }
+        }
+        1 -> {
+          when (_runtimeProfile.value) {
+            MPVProfile.HighQuality -> {
+              applyRuntimeProfile(MPVProfile.Default, automatic = true)
+              logAutomaticAdjustment("MPV 配置档：高质量 → 默认")
+              return
+            }
+            MPVProfile.Default -> {
+              applyRuntimeProfile(MPVProfile.Fast, automatic = true)
+              automaticStage++
+              logAutomaticAdjustment("MPV 配置档：默认 → 快速")
+              return
+            }
+            MPVProfile.Fast -> automaticStage++
+            else -> {
+              applyRuntimeProfile(MPVProfile.Fast, automatic = true)
+              automaticStage++
+              logAutomaticAdjustment("MPV 配置档 → 快速")
+              return
+            }
+          }
+        }
+        2 -> {
+          automaticStage++
+          if (!automaticAnimeSuppressed && (host as? PlayerActivity)?.player?.isAnime4KConfigured() == true) {
+            automaticAnimeSuppressed = true
+            (host as? PlayerActivity)?.player?.setRuntimeAnime4KSuppressed(true)
+            logAutomaticAdjustment("临时关闭 AI 超分辨率")
+            return
+          }
+        }
+        3 -> {
+          automaticStage++
+          if (!automaticBrightnessMemorySuppressed && playerPreferences.rememberBrightness.get()) {
+            automaticBrightnessMemorySuppressed = true
+            logAutomaticAdjustment("临时停止记忆屏幕亮度")
+            return
+          }
+        }
+        4 -> {
+          automaticStage++
+          if (!automaticHdrSuppressed && _sdrHdrBoostEnabled.value && _videoDynamicRange.value == VideoDynamicRange.SDR) {
+            automaticHdrSuppressed = true
+            applySdrHdrBoostIfChanged(false)
+            logAutomaticAdjustment("临时关闭 SDR→HDR 增强")
+            return
+          }
+        }
+        5 -> {
+          automaticStage++
+          if (canAutoSelectHardwarePlus() && _selectedDecoder.value != Decoder.HWPlus) {
+            logAutomaticAdjustment("切换到硬件解码增强")
+            val baselineDecoder = _selectedDecoder.value
+            _selectedDecoder.value = Decoder.HWPlus
+            _hardwarePlusMode.value = true
+            (host as? PlayerActivity)?.switchDecoderAutomatically(Decoder.HWPlus, baselineDecoder)
+            return
+          }
+        }
+      }
+    }
+  }
+
+  fun applyRuntimeProfile(profile: MPVProfile, automatic: Boolean = false) {
+    MPVLib.command("apply-profile", profile.value)
+    _runtimeProfile.value = profile
+    if (!automatic) automaticRuntimeBaseline?.profile = profile
+  }
+
+  private fun logAutomaticAdjustment(message: String) {
+    Log.i(TAG, "AutomaticControl: $message")
+    playerUpdate.value = PlayerUpdates.ShowText("自动控制：$message")
+  }
+
+  fun resetAutomaticControlForMediaChange(): Boolean {
+    automaticRuntimeBaseline?.let { baseline ->
+      MPVLib.setPropertyDouble("speed", baseline.speed)
+      MPVLib.command("apply-profile", baseline.profile.value)
+      _runtimeProfile.value = baseline.profile
+    }
+    automaticRuntimeBaseline = null
+    automaticStage = 0
+    lastAutoSpeed = null
+    automaticAnimeSuppressed = false
+    automaticBrightnessMemorySuppressed = false
+    automaticHdrSuppressed = false
+    (host as? PlayerActivity)?.player?.setRuntimeAnime4KSuppressed(false)
+    resetLowFpsObservation()
+    return (host as? PlayerActivity)?.restoreAutomaticDecoderIfNeeded() == true
+  }
+
+  fun shouldPersistBrightness(): Boolean =
+    playerPreferences.rememberBrightness.get() && !automaticBrightnessMemorySuppressed
+
   fun onVideoLoaded(hdrType: VideoHdrType) {
+    hardwarePlusRejectedForCurrentFile = false
+    if (_autoCropEnabled.value) startAutoCropDetection()
     _sdrHdrBoostEnabled.value = decoderPreferences.boostSdrToHdr.get()
     _videoHdrType.value = hdrType
     val dynamicRange = hdrType.dynamicRange
@@ -1963,6 +2315,20 @@ class PlayerViewModel(
       updateVideoHdrType(videoHdrType.value, forceApply = true)
     }
   }
+
+  private var hardwarePlusRejectedForCurrentFile = false
+
+  fun onRuntimeDecoderResolved(decoder: Decoder) {
+    if (_selectedDecoder.value == Decoder.HWPlus && decoder != Decoder.HWPlus) {
+      hardwarePlusRejectedForCurrentFile = true
+      Log.w(TAG, "HW+ rejected by mpv for this file; runtime fallback resolved to $decoder")
+    }
+    _selectedDecoder.value = decoder
+    _hardwarePlusMode.value = decoder == Decoder.HWPlus
+  }
+
+  fun canAutoSelectHardwarePlus(): Boolean =
+    decoderPreferences.hardwarePlusEnabled.get() && !hardwarePlusRejectedForCurrentFile
 
   fun toggleHdrPlayback() {
     if (hardwarePlusMode.value) {

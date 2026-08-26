@@ -23,7 +23,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-//!DESC [Ani4Kv2_ArtCNN_C4F32_i2_CMP] (Conv2D)
+//!DESC ArtCNN C4F32 (Conv2D)
 //!COMPUTE 16 16 2 16
 //!HOOK LUMA
 //!BIND LUMA
@@ -31,7 +31,6 @@
 //!WIDTH LUMA.w 8.0 *
 //!HEIGHT LUMA.h
 //!COMPONENTS 4
-//!WHEN OUTPUT.w LUMA.w / 1.2 > OUTPUT.h LUMA.h / 1.2 > *
 
 #extension GL_EXT_shader_explicit_arithmetic_types_float16 : enable
 #ifdef GL_EXT_shader_explicit_arithmetic_types_float16
@@ -154,7 +153,8 @@ void hook() {
     ivec2 store_pos7 = ivec2(gl_GlobalInvocationID) * ivec2(8, 1) + ivec2(7, 0);
     imageStore(out_image, store_pos7, result7);
 }
-//!DESC [Ani4Kv2_ArtCNN_C4F32_i2_CMP] (Conv2D-1-ReLU)
+
+//!DESC ArtCNN C4F32 (Conv2D-1-ReLU)
 //!COMPUTE 16 16 2 16
 //!HOOK LUMA
 //!BIND conv2d
@@ -162,7 +162,6 @@ void hook() {
 //!WIDTH LUMA.w 8.0 *
 //!HEIGHT LUMA.h
 //!COMPONENTS 4
-//!WHEN OUTPUT.w LUMA.w / 1.2 > OUTPUT.h LUMA.h / 1.2 > *
 
 #extension GL_EXT_shader_explicit_arithmetic_types_float16 : enable
 #ifdef GL_EXT_shader_explicit_arithmetic_types_float16
@@ -797,7 +796,7 @@ void hook() {
     imageStore(out_image, store_pos7, max(result7, V4(0.0)));
 }
 
-//!DESC [Ani4Kv2_ArtCNN_C4F32_i2_CMP] (Conv2D-2-ReLU)
+//!DESC ArtCNN C4F32 (Conv2D-2-ReLU)
 //!COMPUTE 16 16 2 16
 //!HOOK LUMA
 //!BIND conv2d_1
@@ -805,7 +804,6 @@ void hook() {
 //!WIDTH LUMA.w 8.0 *
 //!HEIGHT LUMA.h
 //!COMPONENTS 4
-//!WHEN OUTPUT.w LUMA.w / 1.2 > OUTPUT.h LUMA.h / 1.2 > *
 
 #extension GL_EXT_shader_explicit_arithmetic_types_float16 : enable
 #ifdef GL_EXT_shader_explicit_arithmetic_types_float16
@@ -1440,7 +1438,7 @@ void hook() {
     imageStore(out_image, store_pos7, max(result7, V4(0.0)));
 }
 
-//!DESC [Ani4Kv2_ArtCNN_C4F32_i2_CMP] (Conv2D-3-ReLU)
+//!DESC ArtCNN C4F32 (Conv2D-3-ReLU)
 //!COMPUTE 16 16 2 16
 //!HOOK LUMA
 //!BIND conv2d_2
@@ -1448,7 +1446,6 @@ void hook() {
 //!WIDTH LUMA.w 8.0 *
 //!HEIGHT LUMA.h
 //!COMPONENTS 4
-//!WHEN OUTPUT.w LUMA.w / 1.2 > OUTPUT.h LUMA.h / 1.2 > *
 
 #extension GL_EXT_shader_explicit_arithmetic_types_float16 : enable
 #ifdef GL_EXT_shader_explicit_arithmetic_types_float16
@@ -2083,7 +2080,7 @@ void hook() {
     imageStore(out_image, store_pos7, max(result7, V4(0.0)));
 }
 
-//!DESC [Ani4Kv2_ArtCNN_C4F32_i2_CMP] (Conv2D-4-ReLU)
+//!DESC ArtCNN C4F32 (Conv2D-4-ReLU)
 //!COMPUTE 16 16 2 16
 //!HOOK LUMA
 //!BIND conv2d_3
@@ -2091,7 +2088,6 @@ void hook() {
 //!WIDTH LUMA.w 8.0 *
 //!HEIGHT LUMA.h
 //!COMPONENTS 4
-//!WHEN OUTPUT.w LUMA.w / 1.2 > OUTPUT.h LUMA.h / 1.2 > *
 
 #extension GL_EXT_shader_explicit_arithmetic_types_float16 : enable
 #ifdef GL_EXT_shader_explicit_arithmetic_types_float16
@@ -2726,7 +2722,7 @@ void hook() {
     imageStore(out_image, store_pos7, max(result7, V4(0.0)));
 }
 
-//!DESC [Ani4Kv2_ArtCNN_C4F32_i2_CMP] (Conv2D-5)
+//!DESC ArtCNN C4F32 (Conv2D-5)
 //!COMPUTE 16 16 2 16
 //!HOOK LUMA
 //!BIND conv2d_4
@@ -2734,7 +2730,6 @@ void hook() {
 //!WIDTH LUMA.w 8.0 *
 //!HEIGHT LUMA.h
 //!COMPONENTS 4
-//!WHEN OUTPUT.w LUMA.w / 1.2 > OUTPUT.h LUMA.h / 1.2 > *
 
 #extension GL_EXT_shader_explicit_arithmetic_types_float16 : enable
 #ifdef GL_EXT_shader_explicit_arithmetic_types_float16
@@ -3369,7 +3364,7 @@ void hook() {
     imageStore(out_image, store_pos7, result7);
 }
 
-//!DESC [Ani4Kv2_ArtCNN_C4F32_i2_CMP] (Conv2D-6)
+//!DESC ArtCNN C4F32 (Conv2D-6)
 //!COMPUTE 16 16 16 16
 //!HOOK LUMA
 //!BIND conv2d
@@ -3378,7 +3373,6 @@ void hook() {
 //!WIDTH LUMA.w 1.0 *
 //!HEIGHT LUMA.h
 //!COMPONENTS 4
-//!WHEN OUTPUT.w LUMA.w / 1.2 > OUTPUT.h LUMA.h / 1.2 > *
 
 #extension GL_EXT_shader_explicit_arithmetic_types_float16 : enable
 #ifdef GL_EXT_shader_explicit_arithmetic_types_float16
@@ -3488,14 +3482,13 @@ void hook() {
     imageStore(out_image, store_pos0, result0);
 }
 
-//!DESC [Ani4Kv2_ArtCNN_C4F32_i2_CMP] (Depth-To-Space)
+//!DESC ArtCNN C4F32 (Depth-To-Space)
 //!COMPUTE 16 16 16 16
 //!HOOK LUMA
 //!BIND conv2d_6
 //!WIDTH LUMA.w 2.0 *
 //!HEIGHT LUMA.h 2.0 *
 //!COMPONENTS 4
-//!WHEN OUTPUT.w LUMA.w / 1.2 > OUTPUT.h LUMA.h / 1.2 > *
 
 #extension GL_EXT_shader_explicit_arithmetic_types_float16 : enable
 #ifdef GL_EXT_shader_explicit_arithmetic_types_float16
@@ -3515,3 +3508,4 @@ void hook() {
     result.x = conv2d_6_tex((vec2(0.5) - f0) * conv2d_6_pt + conv2d_6_pos)[i0.y * 2 + i0.x];
     imageStore(out_image, ivec2(gl_GlobalInvocationID), clamp(result, 0.0, 1.0));
 }
+

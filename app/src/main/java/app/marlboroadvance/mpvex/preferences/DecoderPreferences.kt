@@ -19,6 +19,9 @@ class DecoderPreferences(
         (parsed + listOf(Decoder.HWPlus, Decoder.HW, Decoder.SW)).distinct().filter { it in Decoder.priorityModes }
       },
     )
+  // Deliberately uses a new key with a false default. Existing installations
+  // therefore do not silently opt into the least compatible decoder after update.
+  val hardwarePlusEnabled = preferenceStore.getBoolean("decoder_hardware_plus_enabled_v2", false)
   val gpuNext = preferenceStore.getBoolean("gpu_next")
   val useVulkan = preferenceStore.getBoolean("use_vulkan", false)
   val boostSdrToHdr = preferenceStore.getBoolean("boost_sdr_to_hdr", false)
@@ -41,4 +44,10 @@ class DecoderPreferences(
   val enableAnime4K = preferenceStore.getBoolean("enable_anime4k", false)
   val anime4kMode = preferenceStore.getString("anime4k_mode", "OFF")
   val anime4kQuality = preferenceStore.getString("anime4k_quality", "FAST")
+
+  fun effectiveDecoderPriority(): List<Decoder> {
+    val configured = decoderPriority.get()
+    val enabled = configured.filter { it != Decoder.HWPlus || hardwarePlusEnabled.get() }
+    return (enabled + listOf(Decoder.HW, Decoder.SW)).distinct().filter { it in Decoder.priorityModes }
+  }
 }

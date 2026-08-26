@@ -39,22 +39,11 @@ class AppearancePreferences(
   val topRightControls =
     preferenceStore.getString(
       "top_right_controls",
-      "CURRENT_CHAPTER,DECODER,HDR_MODE,AUDIO_TRACK,SUBTITLES,MORE_OPTIONS",
+      "CURRENT_CHAPTER,DECODER,AI_UPSCALE,HDR_MODE,AUDIO_TRACK,SUBTITLES",
     )
 
   private val hdrControlMigration = preferenceStore.getBoolean("hdr_control_layout_migrated", false)
-
-  init {
-    if (!hdrControlMigration.get()) {
-      val controls = topRightControls.get().split(',').map(String::trim).filter(String::isNotEmpty).toMutableList()
-      if ("HDR_MODE" !in controls) {
-        val decoderIndex = controls.indexOf("DECODER")
-        controls.add(if (decoderIndex >= 0) decoderIndex + 1 else controls.size, "HDR_MODE")
-        topRightControls.set(controls.joinToString(","))
-      }
-      hdrControlMigration.set(true)
-    }
-  }
+  private val aiControlMigration = preferenceStore.getBoolean("ai_control_layout_migrated_v1", false)
 
   val bottomRightControls =
     preferenceStore.getString(
@@ -71,8 +60,34 @@ class AppearancePreferences(
   val portraitBottomControls =
     preferenceStore.getString(
       "portrait_bottom_controls",
-      "SCREEN_ROTATION,DECODER,AUDIO_TRACK,SUBTITLES,BOOKMARKS_CHAPTERS,PLAYBACK_SPEED,BACKGROUND_PLAYBACK,REPEAT_MODE,SHUFFLE,VIDEO_ZOOM,FRAME_NAVIGATION,ASPECT_RATIO,PICTURE_IN_PICTURE,LOCK_CONTROLS,MORE_OPTIONS",
+      "SCREEN_ROTATION,DECODER,AI_UPSCALE,AUDIO_TRACK,SUBTITLES,BOOKMARKS_CHAPTERS,PLAYBACK_SPEED,BACKGROUND_PLAYBACK,REPEAT_MODE,SHUFFLE,VIDEO_ZOOM,FRAME_NAVIGATION,ASPECT_RATIO,PICTURE_IN_PICTURE,LOCK_CONTROLS",
     )
+
+  init {
+    if (!hdrControlMigration.get()) {
+      val controls = topRightControls.get().split(',').map(String::trim).filter(String::isNotEmpty).toMutableList()
+      if ("HDR_MODE" !in controls) {
+        val decoderIndex = controls.indexOf("DECODER")
+        controls.add(if (decoderIndex >= 0) decoderIndex + 1 else controls.size, "HDR_MODE")
+        topRightControls.set(controls.joinToString(","))
+      }
+      hdrControlMigration.set(true)
+    }
+    if (!aiControlMigration.get()) {
+      fun migrate(value: String): String {
+        val controls = value.split(',').map(String::trim).filter(String::isNotEmpty).toMutableList()
+        controls.removeAll { it == "MORE_OPTIONS" || it == "AI_UPSCALE" }
+        val decoderIndex = controls.indexOf("DECODER")
+        controls.add(if (decoderIndex >= 0) decoderIndex + 1 else controls.size, "AI_UPSCALE")
+        return controls.joinToString(",")
+      }
+      topRightControls.set(migrate(topRightControls.get()))
+      portraitBottomControls.set(migrate(portraitBottomControls.get()))
+      bottomLeftControls.set(bottomLeftControls.get().split(',').filter { it != "MORE_OPTIONS" }.joinToString(","))
+      bottomRightControls.set(bottomRightControls.get().split(',').filter { it != "MORE_OPTIONS" }.joinToString(","))
+      aiControlMigration.set(true)
+    }
+  }
 
   fun parseButtons(
     csv: String,

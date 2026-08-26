@@ -43,6 +43,8 @@ import app.marlboroadvance.mpvex.preferences.AudioPreferences
 import app.marlboroadvance.mpvex.preferences.BrowserPreferences
 import app.marlboroadvance.mpvex.preferences.PlayerPreferences
 import app.marlboroadvance.mpvex.preferences.SubtitlesPreferences
+import app.marlboroadvance.mpvex.preferences.DecoderPreferences
+import app.marlboroadvance.mpvex.domain.anime4k.Anime4KManager
 import app.marlboroadvance.mpvex.ui.player.controls.PlayerControls
 import app.marlboroadvance.mpvex.ui.theme.MpvexTheme
 import app.marlboroadvance.mpvex.utils.history.RecentlyPlayedOps
@@ -104,6 +106,7 @@ class PlayerActivity :
   private val viewModel: PlayerViewModel by viewModels<PlayerViewModel> {
     PlayerViewModelProviderFactory(this)
   }
+  private val decoderPreferences: DecoderPreferences by inject()
 
   /**
    * Binding for the player layout.
@@ -349,6 +352,7 @@ class PlayerActivity :
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
+    activeInstance = this
     setContentView(binding.root)
 
     // OPTIMIZATION: Set volume control stream so hardware buttons control media volume
@@ -359,7 +363,6 @@ class PlayerActivity :
         Decoder.priorityModes.firstOrNull { it.value == value }
       }
     setupMPV()
-    startAnime4KSafetyMonitor()
     MediaPlaybackService.createNotificationChannel(this)
     setupAudio()
     setupBackPressHandler()
@@ -584,6 +587,7 @@ class PlayerActivity :
   @RequiresApi(Build.VERSION_CODES.P)
   override fun onDestroy() {
     Log.d(TAG, "PlayerActivity onDestroy")
+    if (activeInstance === this) activeInstance = null
 
     runCatching {
       // OPTIMIZATION: Prevent any further UI updates or callbacks
@@ -671,6 +675,103 @@ class PlayerActivity :
 
   override fun switchDecoder(decoder: Decoder) {
     if (decoder == player.activeDecoder || !mpvInitialized) return
+    restartPlayback(decoder)
+  }
+
+  /** Debug-build ADB control surface. Commands follow the same persistence rules as the UI. */
+  fun handleDebugCommand(command: String, value: String?): String =
+    runCatching {
+      when (command.lowercase()) {
+        "decoder" -> {
+          val decoder = Decoder.priorityModes.firstOrNull { it.name.equals(value, true) || it.value.equals(value, true) }
+            ?: error("decoder must be HWPlus, HW or SW")
+          if (decoder == Decoder.HWPlus && !decoderPreferences.hardwarePlusEnabled.get()) {
+            error("HWPlus is not enabled in decoder priority")
+          }
+          viewModel.selectDecoder(decoder)
+          "temporary decoder=$decoder"
+        }
+        "speed" -> {
+          val speed = value?.toDoubleOrNull()?.takeIf { it in 0.1..4.0 } ?: error("speed must be 0.1..4.0")
+          MPVLib.setPropertyDouble("speed", speed)
+          "temporary speed=$speed"
+        }
+        "profile" -> {
+          val profile = MPVProfile.entries.firstOrNull { it.name.equals(value, true) || it.value.equals(value, true) }
+            ?: error("unknown profile")
+          viewModel.applyRuntimeProfile(profile)
+          "temporary profile=${profile.value}"
+        }
+        "hdr" -> {
+          viewModel.toggleHdrPlayback()
+          "SDR-to-HDR toggled and persisted"
+        }
+        "auto_crop" -> {
+          val enabled = value.toDebugBoolean()
+          viewModel.setAutoCropEnabled(enabled)
+          "temporary auto_crop=$enabled"
+        }
+        "anime_mode" -> {
+          val mode = Anime4KManager.Mode.entries.firstOrNull { it.name.equals(value, true) } ?: error("unknown AI mode")
+          decoderPreferences.anime4kMode.set(mode.name)
+          viewModel.refreshAiUpscale()
+          "persistent anime_mode=${mode.name}"
+        }
+        "gpu_next" -> {
+          val enabled = value.toDebugBoolean()
+          decoderPreferences.gpuNext.set(enabled)
+          "persistent gpu_next=$enabled (restart player to apply renderer)"
+        }
+        "vulkan" -> {
+          val enabled = value.toDebugBoolean()
+          decoderPreferences.useVulkan.set(enabled)
+          "persistent vulkan=$enabled (restart player to apply renderer)"
+        }
+        "hardware_plus_enabled" -> {
+          val enabled = value.toDebugBoolean()
+          decoderPreferences.hardwarePlusEnabled.set(enabled)
+          "persistent hardware_plus_enabled=$enabled"
+        }
+        "console" -> {
+          val enabled = value.toDebugBoolean()
+          MPVLib.command("script-message-to", "console", if (enabled) "enable" else "disable")
+          "console=$enabled"
+        }
+        else -> error("unknown command: $command")
+      }
+    }.onSuccess { Log.i(TAG, "ADB debug command '$command': $it") }
+      .onFailure { Log.e(TAG, "ADB debug command '$command' failed", it) }
+      .fold(onSuccess = { "OK: $it" }, onFailure = { "ERROR: ${it.message}" })
+
+  private fun String?.toDebugBoolean(): Boolean =
+    when (this?.lowercase()) {
+      "1", "true", "on", "yes" -> true
+      "0", "false", "off", "no" -> false
+      else -> error("value must be true/false")
+    }
+
+  fun switchDecoderAutomatically(decoder: Decoder, baseline: Decoder) {
+    if (decoder == player.activeDecoder || !mpvInitialized) return
+    intent.putExtra(EXTRA_AUTOMATIC_DECODER_BASELINE, baseline.value)
+    restartPlayback(decoder)
+  }
+
+  fun restoreAutomaticDecoderIfNeeded(): Boolean {
+    val baseline =
+      intent.getStringExtra(EXTRA_AUTOMATIC_DECODER_BASELINE)?.let { value ->
+        Decoder.priorityModes.firstOrNull { it.value == value }
+      } ?: return false
+    intent.removeExtra(EXTRA_AUTOMATIC_DECODER_BASELINE)
+    restartPlayback(baseline)
+    return true
+  }
+
+  fun restartForRendererSettings() {
+    if (!mpvInitialized) return
+    restartPlayback(viewModel.selectedDecoder.value)
+  }
+
+  private fun restartPlayback(decoder: Decoder) {
     lifecycleScope.launch {
       val wasPlaying = MPVLib.getPropertyBoolean("pause") != true
       MPVLib.setPropertyBoolean("pause", true)
@@ -691,25 +792,31 @@ class PlayerActivity :
       }
 
       isDecoderRestarting = true
-      shutdownMPVForDecoderSwitch()
-      startActivity(restartIntent)
-      overridePendingTransition(0, 0)
-      finish()
+      restartPlayerInFreshProcess(restartIntent)
     }
   }
 
-  private suspend fun shutdownMPVForDecoderSwitch() {
-    if (!mpvInitialized) return
+  private fun restartPlayerInFreshProcess(restartIntent: Intent) {
     isReady = false
     player.isExiting = true
     runCatching {
-      MPVLib.removeObserver(playerObserver)
-      MPVLib.command("quit")
-      delay(120)
-      MPVLib.destroy()
-      mpvInitialized = false
+      val trampoline =
+        Intent(this, DecoderRestartActivity::class.java).apply {
+          putExtra(DecoderRestartActivity.EXTRA_PLAYER_INTENT, restartIntent)
+          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+        }
+      startActivity(trampoline)
+      overridePendingTransition(0, 0)
+
+      // Never tear libmpv down and initialise it again inside this process.
+      // Android will reclaim the complete native process, including RenderThread,
+      // while the isolated trampoline starts a clean player process afterwards.
+      android.os.Process.killProcess(android.os.Process.myPid())
     }.onFailure { error ->
-      Log.e(TAG, "Failed to restart MPV for decoder switch", error)
+      isDecoderRestarting = false
+      player.isExiting = false
+      isReady = true
+      Log.e(TAG, "Failed to hand decoder restart to isolated process", error)
     }
   }
 
@@ -1687,8 +1794,18 @@ class PlayerActivity :
     property: String,
     value: String,
   ) {
-    if (property == "video-params/gamma" || property == "video-params/primaries") {
-      refreshVideoHdrState()
+    when (property) {
+      "video-params/gamma", "video-params/primaries" -> refreshVideoHdrState()
+      "hwdec-current" -> {
+        val decoder =
+          when {
+            value.contains("mediacodec-copy", ignoreCase = true) -> Decoder.HW
+            value.contains("mediacodec", ignoreCase = true) -> Decoder.HWPlus
+            value.equals("no", ignoreCase = true) || value.isBlank() -> Decoder.SW
+            else -> return
+          }
+        viewModel.onRuntimeDecoderResolved(decoder)
+      }
     }
   }
 
@@ -1731,7 +1848,12 @@ class PlayerActivity :
    * applies user preferences, and sets up metadata and media session.
    */
   private fun handleFileLoaded() {
-    player.resetAnime4KSafety()
+    val loadedUri = extractUriFromIntent(intent)
+    val durationSeconds = MPVLib.getPropertyDouble("duration") ?: 0.0
+    if (loadedUri != null && HttpUtils.isNetworkStream(loadedUri) && durationSeconds <= 0.0) {
+      MPVLib.command("apply-profile", MPVProfile.LowLatency.value)
+      Log.i(TAG, "Applied low-latency profile for live stream")
+    }
     val hdrType = player.currentVideoHdrType()
     player.applyHardwarePlusHdrForSource(hdrType)
     viewModel.onVideoLoaded(hdrType)
@@ -1906,22 +2028,10 @@ class PlayerActivity :
       pendingPlaybackState = state
       pendingPlaybackStateIdentifier = requestedIdentifier
       pendingStartPositionApplied = startPosition != null
+      if (viewModel.resetAutomaticControlForMediaChange()) return@launch
 
       withContext(Dispatchers.Default) {
         MPVLib.command(*buildLoadFileCommand(playableUri, startPosition).toTypedArray())
-      }
-    }
-  }
-
-  private fun startAnime4KSafetyMonitor() {
-    lifecycleScope.launch {
-      while (isActive) {
-        delay(ANIME4K_SAFETY_SAMPLE_INTERVAL_MS)
-        if (mpvInitialized && !player.isExiting && !isFinishing && viewModel.paused == false &&
-          player.isAnime4KConfigured()
-        ) {
-          player.refreshAnime4KSafety(ThermalMonitor.readPressure(this@PlayerActivity))
-        }
       }
     }
   }
@@ -3460,8 +3570,13 @@ class PlayerActivity :
 
 
   companion object {
+    @Volatile
+    var activeInstance: PlayerActivity? = null
+      private set
+
     private const val EXTRA_DECODER_OVERRIDE = "mpvex.decoder_override"
     private const val EXTRA_RESUME_PLAYING = "mpvex.resume_playing"
+    private const val EXTRA_AUTOMATIC_DECODER_BASELINE = "mpvex.automatic_decoder_baseline"
     /**
      * Intent action used to return playback result data to the calling activity.
      */
@@ -3501,9 +3616,6 @@ class PlayerActivity :
      * Default subtitle speed (1.0 = normal).
      */
     private const val DEFAULT_SUB_SPEED = 1.0
-
-    /** Thermal and frame-pressure sampling interval; matches Android's low-frequency guidance. */
-    private const val ANIME4K_SAFETY_SAMPLE_INTERVAL_MS = 10_000L
 
     /**
      * General tag for logging from PlayerActivity.
