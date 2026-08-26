@@ -693,6 +693,10 @@ class PlayerActivity :
 
   override fun switchDecoder(decoder: Decoder) {
     if (decoder == player.activeDecoder || !mpvInitialized) return
+    // A user choice made after automatic control intervened becomes the new
+    // runtime baseline. Do not restore the decoder that preceded auto control
+    // when the next file is loaded.
+    intent.removeExtra(EXTRA_AUTOMATIC_DECODER_BASELINE)
     restartPlayback(decoder)
   }
 

@@ -1276,7 +1276,11 @@ class PlayerViewModel(
           val topCrop = detectedY.coerceAtLeast(0)
           val rightCrop = (sourceWidth - detectedX - detectedWidth).coerceAtLeast(0)
           val detectedBottomCrop = (sourceHeight - detectedY - detectedHeight).coerceAtLeast(0)
-          val protectedBottom = (sourceHeight * 0.06f).roundToInt()
+          // Burned-in subtitles are commonly placed inside the lower letterbox.
+          // cropdetect cannot know whether a subtitle will appear later, so keep
+          // a conservative 12% lower safe band. This intentionally under-crops
+          // very wide films instead of risking permanent subtitle loss.
+          val protectedBottom = (sourceHeight * 0.12f).roundToInt()
           val bottomCrop = (detectedBottomCrop - protectedBottom).coerceAtLeast(0)
           val cropWidth = (sourceWidth - leftCrop - rightCrop).coerceAtLeast(2)
           val cropHeight = (sourceHeight - topCrop - bottomCrop).coerceAtLeast(2)
