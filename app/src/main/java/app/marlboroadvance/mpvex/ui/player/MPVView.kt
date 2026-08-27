@@ -483,13 +483,12 @@ class MPVView(
     if (!decoderPreferences.enableAnime4K.get()) return emptyList()
     if (backend.videoOutput == "gpu-next" && backend.gpuApi != "vulkan") return emptyList()
     if (!anime4kManager.initialize()) return emptyList()
-    if (!hasAnime4KUpscaleHeadroom()) {
-      Log.i(TAG, "Anime4K temporarily disabled: displayed image is below the 1.2x upscale threshold")
-      return emptyList()
-    }
-
     val selection = preferredAnime4KSelection()
     if (selection.mode == Anime4KManager.Mode.OFF) return emptyList()
+    if (!hasAiUpscaleHeadroom()) {
+      Log.i(TAG, "AI upscaling temporarily disabled: both dimensions must reach the 1.3x threshold")
+      return emptyList()
+    }
     val shaderChain = anime4kManager.getShaderChain(selection.mode, selection.quality)
     if (shaderChain.isEmpty()) return emptyList()
 
@@ -511,7 +510,10 @@ class MPVView(
           .getOrDefault(Anime4KManager.Quality.BALANCED),
     )
 
-  private fun hasAnime4KUpscaleHeadroom(): Boolean {
+  fun isAiUpscalingActive(): Boolean =
+    isAnime4KConfigured() && !runtimeAnime4KSuppressed && hasAiUpscaleHeadroom()
+
+  private fun hasAiUpscaleHeadroom(): Boolean {
     val inputWidth =
       (MPVLib.getPropertyInt("video-out-params/w")
         ?: MPVLib.getPropertyInt("video-params/w")
@@ -538,7 +540,7 @@ class MPVView(
         }
         VideoAspect.Stretch -> widthScale to heightScale
       }
-    return outputWidthScale >= 1.2f || outputHeightScale >= 1.2f
+    return meetsAiUpscaleThreshold(outputWidthScale, outputHeightScale)
   }
 
 }

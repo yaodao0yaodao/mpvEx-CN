@@ -227,7 +227,7 @@ fun RenderPlayerButton(
 
     PlayerButton.PLAYBACK_SPEED -> {
       val cycleSpeed = {
-        MPVLib.setPropertyDouble("speed", nextPlaybackSpeed(playbackSpeed).toDouble())
+        viewModel.applyRuntimeSpeed(nextPlaybackSpeed(playbackSpeed))
       }
       if (isSpeedNonOne) {
         Surface(

@@ -22,7 +22,7 @@ class RendererBackendPolicyTest {
   fun `Anime4K avoids unsupported gpu-next OpenGL combination`() {
     val backend = selectRendererBackend(true, false, false, true, false)
 
-    assertEquals(RendererBackend("gpu-next", "opengl", "android"), backend)
+    assertEquals(RendererBackend("gpu", "opengl", "android"), backend)
   }
 
   @Test
@@ -43,7 +43,30 @@ class RendererBackendPolicyTest {
   fun `decoder override and stored priority map to mpv hwdec values`() {
     assertEquals("mediacodec-copy", initialHwdecValue(Decoder.HW, Decoder.priorityModes))
     assertEquals("mediacodec", initialHwdecValue(Decoder.HWPlus, Decoder.priorityModes))
-    assertEquals("mediacodec,mediacodec-copy,no", initialHwdecValue(null, Decoder.priorityModes))
+    assertEquals("mediacodec", initialHwdecValue(null, Decoder.priorityModes))
     assertEquals("no", decoderPriorityHwdecValue(listOf(Decoder.SW, Decoder.HWPlus, Decoder.HW)))
+  }
+
+  @Test
+  fun `fallback order wraps once and never retries a decoder`() {
+    val priority = listOf(Decoder.SW, Decoder.HWPlus, Decoder.HW)
+    assertEquals(listOf(Decoder.HWPlus, Decoder.HW, Decoder.SW), decoderFallbackOrder(priority, Decoder.HWPlus))
+    assertEquals(Decoder.HW, nextDecoderFallback(priority, Decoder.HWPlus, setOf(Decoder.HWPlus)))
+    assertEquals(null, nextDecoderFallback(priority, Decoder.HWPlus, Decoder.priorityModes.toSet()))
+  }
+
+  @Test
+  fun `fallback never reintroduces hardware plus when it is disabled`() {
+    val priority = listOf(Decoder.HW, Decoder.SW)
+    assertEquals(listOf(Decoder.HW, Decoder.SW), decoderFallbackOrder(priority, Decoder.HW))
+    assertEquals(Decoder.SW, nextDecoderFallback(priority, Decoder.HW, setOf(Decoder.HW)))
+    assertEquals(null, nextDecoderFallback(priority, Decoder.HW, setOf(Decoder.HW, Decoder.SW)))
+  }
+
+  @Test
+  fun `Anime4K and ArtCNN share the same two-dimensional 1_3x gate`() {
+    assertEquals(true, meetsAiUpscaleThreshold(1.3f, 1.3f))
+    assertEquals(false, meetsAiUpscaleThreshold(1.299f, 2f))
+    assertEquals(false, meetsAiUpscaleThreshold(2f, 1.299f))
   }
 }

@@ -379,6 +379,11 @@ class PlayerActivity :
       intent.getStringExtra(EXTRA_DECODER_OVERRIDE)?.let { value ->
         Decoder.priorityModes.firstOrNull { it.value == value }
       }
+    val firstDecoder = player.decoderOverride ?: decoderPreferences.effectiveDecoderPriority().firstOrNull() ?: Decoder.HW
+    if (!intent.hasExtra(EXTRA_DECODER_FALLBACK_FIRST)) {
+      intent.putExtra(EXTRA_DECODER_FALLBACK_FIRST, firstDecoder.value)
+      intent.putExtra(EXTRA_DECODER_ATTEMPTED, firstDecoder.name)
+    }
     setupMPV()
     MediaPlaybackService.createNotificationChannel(this)
     setupAudio()
@@ -697,6 +702,8 @@ class PlayerActivity :
     // runtime baseline. Do not restore the decoder that preceded auto control
     // when the next file is loaded.
     intent.removeExtra(EXTRA_AUTOMATIC_DECODER_BASELINE)
+    intent.removeExtra(EXTRA_AUTOMATIC_DECODER_MEDIA)
+    beginDecoderFallback(decoder)
     restartPlayback(decoder)
   }
 
@@ -715,7 +722,7 @@ class PlayerActivity :
         }
         "speed" -> {
           val speed = value?.toDoubleOrNull()?.takeIf { it in 0.1..4.0 } ?: error("speed must be 0.1..4.0")
-          MPVLib.setPropertyDouble("speed", speed)
+          viewModel.applyRuntimeSpeed(speed.toFloat())
           "temporary speed=$speed"
         }
         "profile" -> {
@@ -775,16 +782,23 @@ class PlayerActivity :
   fun switchDecoderAutomatically(decoder: Decoder, baseline: Decoder) {
     if (decoder == player.activeDecoder || !mpvInitialized) return
     intent.putExtra(EXTRA_AUTOMATIC_DECODER_BASELINE, baseline.value)
+    intent.putExtra(EXTRA_AUTOMATIC_DECODER_MEDIA, mediaIdentifier)
+    beginDecoderFallback(decoder)
     restartPlayback(decoder)
   }
 
-  fun restoreAutomaticDecoderIfNeeded(): Boolean {
+  fun restoreAutomaticDecoderIfNeeded(stateAlreadySaved: Boolean = false): Boolean {
+    val automaticMedia = intent.getStringExtra(EXTRA_AUTOMATIC_DECODER_MEDIA)
+    // A fresh process restart for automatic HW+ still belongs to the same
+    // file. Keep the baseline marker until an actual media change occurs.
+    if (automaticMedia != null && automaticMedia == mediaIdentifier) return false
     val baseline =
       intent.getStringExtra(EXTRA_AUTOMATIC_DECODER_BASELINE)?.let { value ->
         Decoder.priorityModes.firstOrNull { it.value == value }
       } ?: return false
     intent.removeExtra(EXTRA_AUTOMATIC_DECODER_BASELINE)
-    restartPlayback(baseline)
+    intent.removeExtra(EXTRA_AUTOMATIC_DECODER_MEDIA)
+    restartPlayback(baseline, stateAlreadySaved)
     return true
   }
 
@@ -793,14 +807,16 @@ class PlayerActivity :
     restartPlayback(viewModel.selectedDecoder.value)
   }
 
-  private fun restartPlayback(decoder: Decoder) {
+  private fun restartPlayback(decoder: Decoder, stateAlreadySaved: Boolean = false) {
+    if (isDecoderRestarting) return
+    isDecoderRestarting = true
     lifecycleScope.launch {
       val wasPlaying = MPVLib.getPropertyBoolean("pause") != true
       MPVLib.setPropertyBoolean("pause", true)
-      if (fileName.isNotBlank()) {
+      if (!stateAlreadySaved && fileName.isNotBlank()) {
         saveVideoPlaybackState(fileName)
-        savePlaybackStateJob?.join()
       }
+      savePlaybackStateJob?.join()
 
       val restartIntent = Intent(intent).apply {
         putExtra(EXTRA_DECODER_OVERRIDE, decoder.value)
@@ -813,10 +829,98 @@ class PlayerActivity :
         addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
       }
 
-      isDecoderRestarting = true
       restartPlayerInFreshProcess(restartIntent)
     }
   }
+
+  private fun beginDecoderFallback(first: Decoder) {
+    intent.putExtra(EXTRA_DECODER_FALLBACK_FIRST, first.value)
+    intent.putExtra(EXTRA_DECODER_ATTEMPTED, first.name)
+  }
+
+  private fun attemptedDecoders(): MutableSet<Decoder> =
+    intent.getStringExtra(EXTRA_DECODER_ATTEMPTED)
+      .orEmpty()
+      .split(',')
+      .mapNotNullTo(linkedSetOf()) { name -> Decoder.priorityModes.firstOrNull { it.name == name } }
+
+  private fun recordDecoderAttempt(decoder: Decoder) {
+    val attempted = attemptedDecoders().apply { add(decoder) }
+    intent.putExtra(EXTRA_DECODER_ATTEMPTED, attempted.joinToString(",") { it.name })
+  }
+
+  private fun fallbackFirstDecoder(): Decoder =
+    intent.getStringExtra(EXTRA_DECODER_FALLBACK_FIRST)
+      ?.let { value -> Decoder.priorityModes.firstOrNull { it.value == value } }
+      ?: player.activeDecoder
+
+  private fun nextDecoderAfterFailure(failed: Decoder): Decoder? {
+    recordDecoderAttempt(failed)
+    val priority = decoderPreferences.effectiveDecoderPriority()
+    return nextDecoderFallback(priority, fallbackFirstDecoder(), attemptedDecoders())
+  }
+
+  private fun handleDecoderResolvedAfterLoad(): Boolean {
+    val requested = player.activeDecoder
+    val actual = decoderFromRuntimeValue(MPVLib.getPropertyString("hwdec-current"))
+    if (actual == null || actual == requested) {
+      actual?.let {
+        recordDecoderAttempt(it)
+        viewModel.onRuntimeDecoderResolved(it)
+      }
+      return false
+    }
+
+    if (requested == Decoder.HWPlus) {
+      intent.putExtra(EXTRA_HWPLUS_REJECTED_MEDIA, mediaIdentifier)
+      viewModel.markHardwarePlusRejected()
+    }
+    val next = nextDecoderAfterFailure(requested)
+    if (next == null) {
+      showDecoderFailure()
+      return true
+    }
+    if (next == actual) {
+      recordDecoderAttempt(actual)
+      viewModel.onRuntimeDecoderResolved(actual)
+      return false
+    }
+    recordDecoderAttempt(next)
+    restartPlayback(next)
+    return true
+  }
+
+  private fun handlePlaybackFailure(data: MPVNode) {
+    val reasonText = data["reason"]?.asString()?.lowercase()
+    val reasonCode = data["reason"]?.asInt()?.toInt()
+    val errorCode = data["error"]?.asInt()?.toInt() ?: 0
+    if (reasonText != "error" && reasonCode != 4 && errorCode >= 0) return
+    val failed = viewModel.selectedDecoder.value
+    val next = nextDecoderAfterFailure(failed)
+    if (next == null) {
+      showDecoderFailure()
+    } else {
+      recordDecoderAttempt(next)
+      restartPlayback(next)
+    }
+  }
+
+  private fun showDecoderFailure() {
+    MPVLib.setPropertyBoolean("pause", true)
+    viewModel.playerUpdate.value = PlayerUpdates.ShowText("所有解码器均播放失败")
+  }
+
+  private fun decoderFromRuntimeValue(value: String?): Decoder? =
+    when {
+      value == null -> null
+      value.contains("mediacodec-copy", true) -> Decoder.HW
+      value.contains("mediacodec", true) -> Decoder.HWPlus
+      value.equals("no", true) || value.isBlank() -> Decoder.SW
+      else -> null
+    }
+
+  fun wasHardwarePlusRejectedForCurrentMedia(): Boolean =
+    intent.getStringExtra(EXTRA_HWPLUS_REJECTED_MEDIA) == mediaIdentifier
 
   private fun restartPlayerInFreshProcess(restartIntent: Intent) {
     isReady = false
@@ -1819,6 +1923,7 @@ class PlayerActivity :
     when (property) {
       "video-params/gamma", "video-params/primaries" -> refreshVideoHdrState()
       "hwdec-current" -> {
+        if (!isReady) return
         val decoder =
           when {
             value.contains("mediacodec-copy", ignoreCase = true) -> Decoder.HW
@@ -1826,6 +1931,23 @@ class PlayerActivity :
             value.equals("no", ignoreCase = true) || value.isBlank() -> Decoder.SW
             else -> return
           }
+        if (decoder != player.activeDecoder) {
+          if (player.activeDecoder == Decoder.HWPlus) {
+            intent.putExtra(EXTRA_HWPLUS_REJECTED_MEDIA, mediaIdentifier)
+            viewModel.markHardwarePlusRejected()
+          }
+          val next = nextDecoderAfterFailure(player.activeDecoder)
+          if (next == null) {
+            showDecoderFailure()
+          } else if (next == decoder) {
+            recordDecoderAttempt(decoder)
+            viewModel.onRuntimeDecoderResolved(decoder)
+          } else {
+            recordDecoderAttempt(next)
+            restartPlayback(next)
+          }
+          return
+        }
         viewModel.onRuntimeDecoderResolved(decoder)
       }
     }
@@ -1848,9 +1970,10 @@ class PlayerActivity :
    *
    * @param eventId The MPV event ID
    */
-  internal fun event(eventId: Int) {
+  internal fun event(eventId: Int, data: MPVNode) {
     when (eventId) {
       MPVLib.MpvEvent.MPV_EVENT_FILE_LOADED -> {
+        if (handleDecoderResolvedAfterLoad()) return
         handleFileLoaded()
         isReady = true
       }
@@ -1861,6 +1984,8 @@ class PlayerActivity :
           isReady = true
         }
       }
+
+      MPVLib.MpvEvent.MPV_EVENT_END_FILE -> handlePlaybackFailure(data)
     }
   }
 
@@ -2246,7 +2371,25 @@ class PlayerActivity :
    * @param mediaTitle The title of the media being played
    */
   private fun saveVideoPlaybackState(mediaTitle: String) {
-    if (mediaIdentifier.isBlank()) return
+    val identifierToSave = mediaIdentifier.takeIf { it.isNotBlank() } ?: return
+
+    // Snapshot every value before starting IO. Playlist navigation updates
+    // mediaIdentifier and asks mpv to load the next file immediately; reading
+    // these values later in the coroutine could save the previous file's state
+    // under the next file's identifier.
+    val currentPosition = viewModel.pos ?: 0
+    val currentDuration = viewModel.duration ?: 0
+    val savePosition = playerPreferences.savePositionOnQuit.get()
+    val playbackSpeed = MPVLib.getPropertyDouble("speed") ?: DEFAULT_PLAYBACK_SPEED
+    val videoZoom = MPVLib.getPropertyDouble("video-zoom")?.toFloat() ?: 0f
+    val primarySubtitle = player.sid
+    val secondarySubtitle = player.secondarySid
+    val subtitleDelay = ((MPVLib.getPropertyDouble("sub-delay") ?: 0.0) * MILLISECONDS_TO_SECONDS).toInt()
+    val subtitleSpeed = MPVLib.getPropertyDouble("sub-speed") ?: DEFAULT_SUB_SPEED
+    val audioTrack = player.aid
+    val audioDelay = ((MPVLib.getPropertyDouble("audio-delay") ?: 0.0) * MILLISECONDS_TO_SECONDS).toInt()
+    val externalSubtitles = viewModel.externalSubtitles.joinToString("|")
+    val watchedThreshold = browserPreferences.watchedThreshold.get()
 
     // Cancel any previous pending save operation
     savePlaybackStateJob?.cancel()
@@ -2254,40 +2397,37 @@ class PlayerActivity :
     // Launch new save job and track it
     savePlaybackStateJob = lifecycleScope.launch(Dispatchers.IO) {
       runCatching {
-        val oldState = playbackStateRepository.getVideoDataByTitle(mediaIdentifier)
-        Log.d(TAG, "Saving playback state for: $mediaTitle (identifier: $mediaIdentifier)")
+        val oldState = playbackStateRepository.getVideoDataByTitle(identifierToSave)
+        Log.d(TAG, "Saving playback state for: $mediaTitle (identifier: $identifierToSave)")
 
-        val lastPosition = calculateSavePosition(oldState)
-        val duration = viewModel.duration ?: 0
-        val timeRemaining = if (duration > lastPosition) duration - lastPosition else 0
+        val lastPosition =
+          if (!savePosition) oldState?.lastPosition ?: 0
+          else if (currentPosition < currentDuration - 1) currentPosition
+          else 0
+        val timeRemaining = if (currentDuration > lastPosition) currentDuration - lastPosition else 0
 
         playbackStateRepository.upsert(
           PlaybackStateEntity(
-            mediaTitle = mediaIdentifier,
+            mediaTitle = identifierToSave,
             lastPosition = lastPosition,
-            playbackSpeed = MPVLib.getPropertyDouble("speed") ?: DEFAULT_PLAYBACK_SPEED,
-            videoZoom = MPVLib.getPropertyDouble("video-zoom")?.toFloat() ?: 0f,
-            sid = player.sid,
-            secondarySid = player.secondarySid,
-            subDelay = ((MPVLib.getPropertyDouble("sub-delay") ?: 0.0) * MILLISECONDS_TO_SECONDS).toInt(),
-            subSpeed = MPVLib.getPropertyDouble("sub-speed") ?: DEFAULT_SUB_SPEED,
-            aid = player.aid,
-            audioDelay =
-              (
-                (MPVLib.getPropertyDouble("audio-delay") ?: 0.0) * MILLISECONDS_TO_SECONDS
-                ).toInt(),
+            playbackSpeed = playbackSpeed,
+            videoZoom = videoZoom,
+            sid = primarySubtitle,
+            secondarySid = secondarySubtitle,
+            subDelay = subtitleDelay,
+            subSpeed = subtitleSpeed,
+            aid = audioTrack,
+            audioDelay = audioDelay,
             timeRemaining = timeRemaining,
-            externalSubtitles = viewModel.externalSubtitles.joinToString("|"),
+            externalSubtitles = externalSubtitles,
             hasBeenWatched = run {
-              val watchedThreshold = browserPreferences.watchedThreshold.get()
-              val durationSeconds = duration.toFloat()
-              val currentPos = viewModel.pos ?: 0
+              val durationSeconds = currentDuration.toFloat()
               
               // Check if we are at the end (effectively watched)
               // Using a small buffer (1s) to account for float inaccuracies or near-end stops
-              val isFinished = (durationSeconds > 0) && (currentPos >= durationSeconds - 1)
+              val isFinished = (durationSeconds > 0) && (currentPosition >= durationSeconds - 1)
 
-              val progress = if (durationSeconds > 0) currentPos.toFloat() / durationSeconds else 0f
+              val progress = if (durationSeconds > 0) currentPosition.toFloat() / durationSeconds else 0f
               val isCurrentlyWatched = progress >= (watchedThreshold / 100f)
               
               // Also check lastPosition in case we are saving partway through (though lastPosition might be 0 if finished)
@@ -2302,25 +2442,6 @@ class PlayerActivity :
         Log.e(TAG, "Error saving playback state", e)
       }
     }
-  }
-
-  /**
-   * Calculates the position to save based on user preferences.
-   *
-   * If "savePositionOnQuit" is not enabled, returns the previous saved position or 0.
-   * If enabled, saves the current playback position unless at end of video.
-   *
-   * @param oldState Previous playback state if it exists
-   * @return Position in seconds to save
-   */
-  private fun calculateSavePosition(oldState: PlaybackStateEntity?): Int {
-    if (!playerPreferences.savePositionOnQuit.get()) {
-      return oldState?.lastPosition ?: 0
-    }
-
-    val pos = viewModel.pos ?: 0
-    val duration = viewModel.duration ?: 0
-    return if (pos < duration - 1) pos else 0
   }
 
   /**
@@ -3283,6 +3404,8 @@ class PlayerActivity :
     fileName = getFileNameFromUri(uri)
     // Generate new media identifier for playback state
     mediaIdentifier = getMediaIdentifierFromUri(uri, fileName)
+    intent.removeExtra(EXTRA_HWPLUS_REJECTED_MEDIA)
+    beginDecoderFallback(player.activeDecoder)
 
     // Set HTTP headers (including referer) for network streams
     setHttpHeadersForUri(uri)
@@ -3599,6 +3722,10 @@ class PlayerActivity :
     private const val EXTRA_DECODER_OVERRIDE = "mpvex.decoder_override"
     private const val EXTRA_RESUME_PLAYING = "mpvex.resume_playing"
     private const val EXTRA_AUTOMATIC_DECODER_BASELINE = "mpvex.automatic_decoder_baseline"
+    private const val EXTRA_AUTOMATIC_DECODER_MEDIA = "mpvex.automatic_decoder_media"
+    private const val EXTRA_DECODER_FALLBACK_FIRST = "mpvex.decoder_fallback_first"
+    private const val EXTRA_DECODER_ATTEMPTED = "mpvex.decoder_attempted"
+    private const val EXTRA_HWPLUS_REJECTED_MEDIA = "mpvex.hwplus_rejected_media"
     /**
      * Intent action used to return playback result data to the calling activity.
      */

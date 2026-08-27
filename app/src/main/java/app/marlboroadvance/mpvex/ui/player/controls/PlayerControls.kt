@@ -1312,14 +1312,14 @@ fun PlayerControls(
       decoder = decoder,
       onUpdateDecoder = viewModel::selectDecoder,
       speed = playbackSpeed ?: playerPreferences.defaultSpeed.get(),
-      onSpeedChange = { MPVLib.setPropertyFloat("speed", it.toFixed(2)) },
+      onSpeedChange = { viewModel.applyRuntimeSpeed(it.toFixed(2)) },
       onMakeDefaultSpeed = { playerPreferences.defaultSpeed.set(it.toFixed(2)) },
       onAddSpeedPreset = { playerPreferences.speedPresets += it.toFixed(2).toString() },
       onRemoveSpeedPreset = { playerPreferences.speedPresets -= it.toFixed(2).toString() },
       onResetSpeedPresets = playerPreferences.speedPresets::delete,
       speedPresets = speedPresets.map { it.toFloat() }.sorted(),
       onResetDefaultSpeed = {
-        MPVLib.setPropertyFloat("speed", playerPreferences.defaultSpeed.deleteAndGet().toFixed(2))
+        viewModel.applyRuntimeSpeed(playerPreferences.defaultSpeed.deleteAndGet().toFixed(2))
       },
       sleepTimerTimeRemaining = sleepTimerTimeRemaining,
       onStartSleepTimer = viewModel::startTimer,

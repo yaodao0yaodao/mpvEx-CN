@@ -125,8 +125,11 @@ class Anime4KManager(private val context: Context) {
     val shaders = mutableListOf<String>()
     val q = quality.suffix
 
-    // Always add Clamp_Highlights (prevent ringing)
-    shaders.add(getShaderPath("Anime4K_Clamp_Highlights.glsl"))
+    // Clamp_Highlights belongs to the classic Anime4K preset chain. ArtCNN
+    // variants are complete standalone shaders and must remain unmodified.
+    if (mode in setOf(Mode.A, Mode.B, Mode.C, Mode.C_PLUS)) {
+      shaders.add(getShaderPath("Anime4K_Clamp_Highlights.glsl"))
+    }
 
     // Add shaders based on mode
     when (mode) {

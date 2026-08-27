@@ -13,11 +13,29 @@ internal fun initialHwdecValue(
   selectedDecoder?.value ?: decoderPriorityHwdecValue(decoderPriority)
 
 internal fun decoderPriorityHwdecValue(priority: List<Decoder>): String {
-  // HW+ is optional. Never append it back after the caller has filtered it out.
-  val normalized = (priority + listOf(Decoder.HW, Decoder.SW)).distinct().filter { it in Decoder.priorityModes }
-  val enabled = normalized.takeWhile { it != Decoder.SW }
-  return if (enabled.isEmpty()) Decoder.SW.value else (enabled.map(Decoder::value) + Decoder.SW.value).joinToString(",")
+  // Each decoder is attempted explicitly by the application. Letting mpv see
+  // the complete list would silently skip priority entries placed after SW.
+  return priority.firstOrNull { it in Decoder.priorityModes }?.value ?: Decoder.SW.value
 }
+
+internal fun decoderFallbackOrder(priority: List<Decoder>, first: Decoder): List<Decoder> {
+  // The caller passes the effective priority, which has already removed HW+
+  // when the user did not opt in. Never add disabled modes back here.
+  val normalized = priority.distinct().filter { it in Decoder.priorityModes }.ifEmpty { listOf(Decoder.SW) }
+  val start = normalized.indexOf(first).takeIf { it >= 0 } ?: 0
+  return List(normalized.size) { normalized[(start + it) % normalized.size] }
+}
+
+internal fun nextDecoderFallback(
+  priority: List<Decoder>,
+  first: Decoder,
+  attempted: Set<Decoder>,
+): Decoder? = decoderFallbackOrder(priority, first).firstOrNull { it !in attempted }
+
+internal fun meetsAiUpscaleThreshold(
+  widthScale: Float,
+  heightScale: Float,
+): Boolean = widthScale >= 1.3f && heightScale >= 1.3f
 
 internal fun selectRendererBackend(
   gpuNextEnabled: Boolean,

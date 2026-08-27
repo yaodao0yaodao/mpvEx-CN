@@ -33,8 +33,11 @@ import `is`.xyz.mpv.FastThumbnails
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.Flow
@@ -48,6 +51,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -55,6 +60,7 @@ import kotlinx.serialization.json.Json
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import androidx.documentfile.provider.DocumentFile
 import app.marlboroadvance.mpvex.preferences.AdvancedPreferences
 import kotlin.properties.ReadOnlyProperty
@@ -184,60 +190,158 @@ class PlayerViewModel(
 
   private val _seekThumbnailPreview = MutableStateFlow(SeekThumbnailPreview())
   val seekThumbnailPreview: StateFlow<SeekThumbnailPreview> = _seekThumbnailPreview.asStateFlow()
-  private val seekThumbnailCache = object : android.util.LruCache<String, Bitmap>(24) {}
-  private var seekThumbnailJob: Job? = null
+  private val seekThumbnailDispatcher = Dispatchers.Default.limitedParallelism(1)
+  private val seekThumbnailCache =
+    object : android.util.LruCache<String, Bitmap>(32 * 1024) {
+      override fun sizeOf(key: String, value: Bitmap): Int = (value.allocationByteCount / 1024).coerceAtLeast(1)
+    }
+  private val seekThumbnailFailures = ConcurrentHashMap<String, Long>()
+  private val seekThumbnailDecodes = ConcurrentHashMap<String, Deferred<Bitmap?>>()
+  private val seekThumbnailRequestLock = Any()
+  private data class SeekThumbnailRequest(
+    val source: String,
+    val bucket: Int,
+    val duration: Float,
+    val requestId: Long,
+  )
+  @Volatile private var pinnedSeekThumbnailSource: String? = null
+  private var pendingSeekThumbnailRequest: SeekThumbnailRequest? = null
+  private var seekThumbnailWorkerJob: Job? = null
   private var seekThumbnailRequestId = 0L
+  private var lastQueuedSeekThumbnailKey: String? = null
 
   fun updateSeekThumbnailPreview(positionSeconds: Float, durationSeconds: Float) {
-    val position = positionSeconds.coerceIn(0f, durationSeconds.coerceAtLeast(0f))
-    val source =
-      sequenceOf("stream-open-filename", "path")
-        .mapNotNull { property -> runCatching { MPVLib.getPropertyString(property) }.getOrNull() }
-        .firstOrNull { candidate ->
-          candidate.isNotBlank() &&
-            !candidate.startsWith("fd://") &&
-            !candidate.startsWith("edl://")
-        }
-    val bucket = (position / 2f).roundToInt()
-    val cacheKey = "${source.orEmpty()}#$bucket"
+    if ((MPVLib.getPropertyInt("vid") ?: 0) <= 0) {
+      hideSeekThumbnailPreview()
+      return
+    }
+    val position = if (durationSeconds > 0f) positionSeconds.coerceIn(0f, durationSeconds) else positionSeconds.coerceAtLeast(0f)
+    val source = resolveSeekThumbnailSource()
+    if (source == null) {
+      _seekThumbnailPreview.value = SeekThumbnailPreview(true, position, null, false)
+      return
+    }
+    val bucket = position.roundToInt().coerceAtLeast(0)
+    val cacheKey = seekThumbnailCacheKey(source, bucket)
     val cached = seekThumbnailCache.get(cacheKey)
-    _seekThumbnailPreview.value =
-      SeekThumbnailPreview(
+    val nearby = cached ?: findNearestSeekThumbnail(source, bucket)
+    val recentlyFailed = seekThumbnailFailures[cacheKey]?.let { SystemClock.elapsedRealtime() - it < 10_000L } == true
+    _seekThumbnailPreview.update {
+      it.copy(
         visible = true,
         positionSeconds = position,
-        bitmap = cached ?: _seekThumbnailPreview.value.bitmap,
-        isLoading = source != null && cached == null,
+        bitmap = nearby ?: it.bitmap,
+        isLoading = !recentlyFailed && nearby == null && it.bitmap == null,
       )
-    if (source == null || cached != null) return
+    }
+    if (cached != null || recentlyFailed || cacheKey == lastQueuedSeekThumbnailKey) return
 
-    val requestId = ++seekThumbnailRequestId
-    seekThumbnailJob?.cancel()
-    seekThumbnailJob =
-      viewModelScope.launch(Dispatchers.IO) {
-        delay(45)
-        val bitmap =
-          runCatching {
-            FastThumbnails.generateAsync(
-              source,
-              (bucket * 2f).coerceAtMost(durationSeconds).toDouble(),
-              480,
-              useHwDec = true,
-            )
-          }.getOrNull()
-        if (bitmap != null) seekThumbnailCache.put(cacheKey, bitmap)
-        if (requestId == seekThumbnailRequestId) {
-          _seekThumbnailPreview.update { current ->
-            current.copy(bitmap = bitmap ?: current.bitmap, isLoading = false)
+    val request = SeekThumbnailRequest(source, bucket, durationSeconds, ++seekThumbnailRequestId)
+    lastQueuedSeekThumbnailKey = cacheKey
+    synchronized(seekThumbnailRequestLock) { pendingSeekThumbnailRequest = request }
+    ensureSeekThumbnailWorker()
+  }
+
+  fun hideSeekThumbnailPreview() {
+    seekThumbnailWorkerJob?.cancel()
+    seekThumbnailWorkerJob = null
+    seekThumbnailRequestId++
+    lastQueuedSeekThumbnailKey = null
+    synchronized(seekThumbnailRequestLock) { pendingSeekThumbnailRequest = null }
+    _seekThumbnailPreview.update { it.copy(visible = false, bitmap = null, isLoading = false) }
+  }
+
+  private fun ensureSeekThumbnailWorker() {
+    if (seekThumbnailWorkerJob?.isActive == true) return
+    seekThumbnailWorkerJob =
+      viewModelScope.launch(seekThumbnailDispatcher) {
+        while (isActive) {
+          val request = synchronized(seekThumbnailRequestLock) { pendingSeekThumbnailRequest.also { pendingSeekThumbnailRequest = null } } ?: break
+          val key = seekThumbnailCacheKey(request.source, request.bucket)
+          val bitmap = loadSeekThumbnail(request)
+          if (bitmap != null && request.requestId == seekThumbnailRequestId) {
+            _seekThumbnailPreview.update { if (it.visible) it.copy(bitmap = bitmap, isLoading = false) else it }
+          } else if (request.requestId == seekThumbnailRequestId && !seekThumbnailDecodes.containsKey(key)) {
+            _seekThumbnailPreview.update { it.copy(isLoading = false) }
           }
+          if (lastQueuedSeekThumbnailKey == key) lastQueuedSeekThumbnailKey = null
         }
       }
   }
 
-  fun hideSeekThumbnailPreview() {
-    seekThumbnailRequestId++
-    seekThumbnailJob?.cancel()
-    seekThumbnailJob = null
-    _seekThumbnailPreview.update { it.copy(visible = false, bitmap = null, isLoading = false) }
+  private suspend fun loadSeekThumbnail(request: SeekThumbnailRequest): Bitmap? {
+    val key = seekThumbnailCacheKey(request.source, request.bucket)
+    seekThumbnailCache.get(key)?.let { return it }
+    if (seekThumbnailFailures[key]?.let { SystemClock.elapsedRealtime() - it < 10_000L } == true) return null
+    val decode = seekThumbnailDecodes[key] ?: startSeekThumbnailDecode(request, key) ?: return null
+    return withTimeoutOrNull(2_500L) { decode.await() }
+  }
+
+  private fun startSeekThumbnailDecode(request: SeekThumbnailRequest, key: String): Deferred<Bitmap?>? {
+    if (seekThumbnailDecodes.size >= 3) return null
+    val time = request.bucket.toFloat().let {
+      if (request.duration > 0f) it.coerceAtMost((request.duration - 0.1f).coerceAtLeast(0f)) else it
+    }
+    val decode =
+      viewModelScope.async(Dispatchers.IO) {
+        val bitmap =
+          try {
+            withTimeout(20_000L) { FastThumbnails.generateAsync(request.source, time.toDouble(), 320, useHwDec = true) }
+          } catch (_: TimeoutCancellationException) {
+            null
+          } catch (cancellation: kotlinx.coroutines.CancellationException) {
+            throw cancellation
+          } catch (_: Exception) {
+            null
+          }
+        if (bitmap != null) {
+          seekThumbnailCache.put(key, bitmap)
+          seekThumbnailFailures.remove(key)
+          if (request.source == pinnedSeekThumbnailSource) {
+            _seekThumbnailPreview.update { current ->
+              if (current.visible && current.positionSeconds.roundToInt() == request.bucket) current.copy(bitmap = bitmap, isLoading = false) else current
+            }
+          }
+        } else {
+          if (seekThumbnailFailures.size >= 128) seekThumbnailFailures.clear()
+          seekThumbnailFailures[key] = SystemClock.elapsedRealtime()
+        }
+        bitmap
+      }
+    seekThumbnailDecodes[key] = decode
+    decode.invokeOnCompletion { seekThumbnailDecodes.remove(key, decode) }
+    return decode
+  }
+
+  private fun resolveSeekThumbnailSource(): String? {
+    pinnedSeekThumbnailSource?.let { return it }
+    val source = sequenceOf("stream-open-filename", "path")
+      .mapNotNull { runCatching { MPVLib.getPropertyString(it) }.getOrNull() }
+      .firstOrNull { candidate ->
+        val scheme = candidate.substringBefore("://", "").lowercase()
+        candidate.isNotBlank() && scheme !in setOf("fd", "edl", "memory", "lavfi", "av", "null")
+      }
+    pinnedSeekThumbnailSource = source
+    return source
+  }
+
+  private fun seekThumbnailCacheKey(source: String, bucket: Int): String = "$source|$bucket|320"
+
+  private fun findNearestSeekThumbnail(source: String, bucket: Int): Bitmap? {
+    for (distance in 1..2) {
+      seekThumbnailCache.get(seekThumbnailCacheKey(source, bucket - distance))?.let { return it }
+      seekThumbnailCache.get(seekThumbnailCacheKey(source, bucket + distance))?.let { return it }
+    }
+    return null
+  }
+
+  private fun resetSeekThumbnailMedia() {
+    hideSeekThumbnailPreview()
+    pinnedSeekThumbnailSource = null
+    seekThumbnailCache.evictAll()
+    seekThumbnailFailures.clear()
+    seekThumbnailDecodes.values.toList().forEach { it.cancel() }
+    seekThumbnailDecodes.clear()
   }
 
   private val _controlsShown = MutableStateFlow(false)
@@ -1297,11 +1401,13 @@ class PlayerViewModel(
           if (stableSamples >= 12) {
             appliedAutoCrop = candidate
             MPVLib.command("vf", "add", "@mpvex_autocrop:crop=$candidate")
+            MPVLib.command("vf", "remove", "@mpvex_cropdetect")
             Log.i(TAG, "Applied stable subtitle-safe auto crop: $candidate")
             applyCurrentAspectAfterAutoCrop()
             return@launch
           }
         }
+        MPVLib.command("vf", "remove", "@mpvex_cropdetect")
       }
   }
 
@@ -1312,6 +1418,8 @@ class PlayerViewModel(
   }
 
   fun refreshAiUpscale() {
+    automaticAnimeSuppressed = false
+    (host as? PlayerActivity)?.player?.setRuntimeAnime4KSuppressed(false)
     (host as? PlayerActivity)?.player?.applyAnime4KShaders()
   }
 
@@ -2211,7 +2319,7 @@ class PlayerViewModel(
         }
         2 -> {
           automaticStage++
-          if (!automaticAnimeSuppressed && (host as? PlayerActivity)?.player?.isAnime4KConfigured() == true) {
+          if (!automaticAnimeSuppressed && (host as? PlayerActivity)?.player?.isAiUpscalingActive() == true) {
             automaticAnimeSuppressed = true
             (host as? PlayerActivity)?.player?.setRuntimeAnime4KSuppressed(true)
             logAutomaticAdjustment("临时关闭 AI 超分辨率")
@@ -2256,12 +2364,21 @@ class PlayerViewModel(
     if (!automatic) automaticRuntimeBaseline?.profile = profile
   }
 
+  fun applyRuntimeSpeed(speed: Float) {
+    val safeSpeed = speed.coerceIn(0.1f, 4f)
+    MPVLib.setPropertyFloat("speed", safeSpeed)
+    automaticRuntimeBaseline?.speed = safeSpeed.toDouble()
+    lastAutoSpeed = null
+  }
+
   private fun logAutomaticAdjustment(message: String) {
     Log.i(TAG, "AutomaticControl: $message")
     playerUpdate.value = PlayerUpdates.ShowText("自动控制：$message")
   }
 
   fun resetAutomaticControlForMediaChange(): Boolean {
+    resetSeekThumbnailMedia()
+    hardwarePlusRejectedForCurrentFile = false
     automaticRuntimeBaseline?.let { baseline ->
       MPVLib.setPropertyDouble("speed", baseline.speed)
       MPVLib.command("apply-profile", baseline.profile.value)
@@ -2275,14 +2392,13 @@ class PlayerViewModel(
     automaticHdrSuppressed = false
     (host as? PlayerActivity)?.player?.setRuntimeAnime4KSuppressed(false)
     resetLowFpsObservation()
-    return (host as? PlayerActivity)?.restoreAutomaticDecoderIfNeeded() == true
+    return (host as? PlayerActivity)?.restoreAutomaticDecoderIfNeeded(stateAlreadySaved = true) == true
   }
 
   fun shouldPersistBrightness(): Boolean =
     playerPreferences.rememberBrightness.get() && !automaticBrightnessMemorySuppressed
 
   fun onVideoLoaded(hdrType: VideoHdrType) {
-    hardwarePlusRejectedForCurrentFile = false
     if (_autoCropEnabled.value) startAutoCropDetection()
     _sdrHdrBoostEnabled.value = decoderPreferences.boostSdrToHdr.get()
     _videoHdrType.value = hdrType
@@ -2322,6 +2438,10 @@ class PlayerViewModel(
 
   private var hardwarePlusRejectedForCurrentFile = false
 
+  fun markHardwarePlusRejected() {
+    hardwarePlusRejectedForCurrentFile = true
+  }
+
   fun onRuntimeDecoderResolved(decoder: Decoder) {
     if (_selectedDecoder.value == Decoder.HWPlus && decoder != Decoder.HWPlus) {
       hardwarePlusRejectedForCurrentFile = true
@@ -2332,7 +2452,9 @@ class PlayerViewModel(
   }
 
   fun canAutoSelectHardwarePlus(): Boolean =
-    decoderPreferences.hardwarePlusEnabled.get() && !hardwarePlusRejectedForCurrentFile
+    decoderPreferences.hardwarePlusEnabled.get() &&
+      !hardwarePlusRejectedForCurrentFile &&
+      (host as? PlayerActivity)?.wasHardwarePlusRejectedForCurrentMedia() != true
 
   fun toggleHdrPlayback() {
     if (hardwarePlusMode.value) {
@@ -2371,6 +2493,7 @@ class PlayerViewModel(
   }
 
   override fun onCleared() {
+    resetSeekThumbnailMedia()
     super.onCleared()
   }
 }

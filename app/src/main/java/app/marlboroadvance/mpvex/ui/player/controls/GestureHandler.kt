@@ -85,6 +85,43 @@ fun GestureHandler(
   val audioPreferences = koinInject<AudioPreferences>()
   val gesturePreferences = koinInject<GesturePreferences>()
   val subtitlesPreferences = koinInject<SubtitlesPreferences>()
+  val subtitleTracks by viewModel.subtitleTracks.collectAsState()
+  val videoAspect by MPVLib.propDouble["video-params/aspect"].collectAsState()
+  val videoZoom by MPVLib.propDouble["video-zoom"].collectAsState()
+  val videoPanY by MPVLib.propDouble["video-pan-y"].collectAsState()
+  val subUseMargins by MPVLib.propString["sub-use-margins"].collectAsState()
+
+  fun subtitleScreenY(subPos: Int, width: Float, height: Float): Float {
+    val selectedId = MPVLib.getPropertyInt("sid") ?: 0
+    val selectedTrack = subtitleTracks.firstOrNull { it.id == selectedId }
+    val styledSubtitle = selectedTrack?.codec?.let { it.contains("ass", true) || it.contains("ssa", true) } == true
+    val anchoredToVideo = (styledSubtitle && !subtitlesPreferences.overrideAssSubs.get()) || subUseMargins == "no"
+    if (anchoredToVideo) {
+      val aspect = videoAspect?.toFloat()?.takeIf { it > 0f }
+      if (aspect != null && height > 0f) {
+        val videoHeight = if (aspect >= width / height) width / aspect else height
+        val scale = 2f.pow(videoZoom?.toFloat() ?: 0f)
+        return (height / 2f + (subPos / 100f - 0.5f + (videoPanY?.toFloat() ?: 0f)) * videoHeight * scale)
+          .coerceIn(0f, height)
+      }
+    }
+    return (height * subPos / 100f).coerceIn(0f, height)
+  }
+
+  fun subtitleHitbox(width: Float, height: Float): Pair<Float, Float> {
+    val scale = (MPVLib.getPropertyDouble("sub-scale")?.toFloat() ?: subtitlesPreferences.subScale.get()).coerceIn(0.4f, 3f)
+    val fontSize = (MPVLib.getPropertyInt("sub-font-size") ?: subtitlesPreferences.fontSize.get()).toFloat()
+    val lineHeight = fontSize / 720f * height * scale * 1.3f
+    val text = MPVLib.getPropertyString("sub-text").orEmpty()
+      .replace(Regex("<[^>]*>"), "")
+      .replace(Regex("[{][^}]*[}]"), "")
+    val margin = (MPVLib.getPropertyInt("sub-margin-x") ?: 25).toFloat()
+    val availableWidth = (width - margin * 2f).coerceAtLeast(1f)
+    val charWidth = (fontSize / 720f * height * scale * 0.55f).coerceAtLeast(1f)
+    val charsPerLine = (availableWidth / charWidth).toInt().coerceAtLeast(1)
+    val lines = if (text.isBlank()) 2 else text.lines().sumOf { ((it.length + charsPerLine - 1) / charsPerLine).coerceAtLeast(1) }
+    return (-50f * scale) to (lineHeight * lines + 80f * scale).coerceAtLeast(200f * scale)
+  }
   val panelShown by viewModel.panelShown.collectAsState()
   val allowGesturesInPanels by playerPreferences.allowGesturesInPanels.collectAsState()
   val paused by MPVLib.propBoolean["pause"].collectAsState()
@@ -712,10 +749,12 @@ fun GestureHandler(
                 val subtitleSelected =
                   (MPVLib.getPropertyInt("sid") ?: 0) > 0 ||
                     (MPVLib.getPropertyInt("secondary-sid") ?: 0) > 0
+                val subtitleY = subtitleScreenY(MPVLib.getPropertyInt("sub-pos") ?: subtitlesPreferences.subPos.get(), size.width.toFloat(), size.height.toFloat())
+                val (hitboxBelow, hitboxAbove) = subtitleHitbox(size.width.toFloat(), size.height.toFloat())
                 subtitleZoomMode =
                   subtitleSelected &&
-                    midX in (size.width * 0.15f)..(size.width * 0.85f) &&
-                    midY >= size.height * 0.52f
+                    midX in (size.width * 0.2f)..(size.width * 0.8f) &&
+                    (subtitleY - midY) in hitboxBelow..hitboxAbove
                 if (subtitleZoomMode) {
                   initialSubtitleScale =
                     MPVLib.getPropertyDouble("sub-scale")?.toFloat()
@@ -736,6 +775,7 @@ fun GestureHandler(
                     lastSubtitleScale =
                       (initialSubtitleScale * (dist / initialSubtitleDistance)).coerceIn(0.1f, 5f)
                     MPVLib.setPropertyDouble("sub-scale", lastSubtitleScale.toDouble())
+                    MPVLib.setPropertyDouble("secondary-sub-scale", lastSubtitleScale.toDouble())
                     viewModel.playerUpdate.update { PlayerUpdates.SubtitleZoom(lastSubtitleScale) }
                   } else if (pinchToZoomGesture) {
                     val zoomDelta = ln((dist / prevDist).toDouble()).toFloat() * 1.2f
