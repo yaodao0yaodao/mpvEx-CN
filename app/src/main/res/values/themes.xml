@@ -2,5 +2,17 @@
 <resources>
 
     <style name="Theme.mpvex" parent="Theme.Material3.DynamicColors.DayNight.NoActionBar" />
-    <style name="Theme.mpvex.NoDisplay" parent="android:style/Theme.NoDisplay" />
+    <!--
+      DecoderRestartActivity must remain alive briefly while the old player
+      process is reaped. Theme.NoDisplay requires finish() before onResume()
+      completes on recent Android/vivo builds, so use a truly transparent
+      window instead of a no-display Activity.
+    -->
+    <style name="Theme.mpvex.DecoderRestart" parent="android:style/Theme.Translucent.NoTitleBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
 </resources>

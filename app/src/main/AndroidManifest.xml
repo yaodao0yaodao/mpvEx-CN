@@ -222,7 +222,7 @@
             android:noHistory="true"
             android:process=":decoder_restart"
             android:taskAffinity=""
-            android:theme="@style/Theme.mpvex.NoDisplay" />
+            android:theme="@style/Theme.mpvex.DecoderRestart" />
         <activity android:name=".presentation.crash.CrashActivity" />
 
         <activity
