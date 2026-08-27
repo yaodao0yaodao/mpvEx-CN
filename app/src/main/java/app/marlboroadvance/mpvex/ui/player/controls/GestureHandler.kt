@@ -884,7 +884,7 @@ fun GestureHandler(
           var gestureType: String? = null
           var hasStartedSeeking = false
           var initialVideoPosition = 0f
-          var wasPlayerAlreadyPaused = false
+          var pendingSeekPosition: Float? = null
           // Use the sensitivity preference instead of hardcoded value
           val seekSensitivity = horizontalSwipeSensitivity
           
@@ -913,12 +913,7 @@ fun GestureHandler(
                     gestureType = "horizontal_seek"
                     hasStartedSeeking = true
                     initialVideoPosition = position?.toFloat() ?: 0f
-                    
-                    // Pause before seeking to prevent decoder stalls
-                    wasPlayerAlreadyPaused = paused ?: false
-                    if (!wasPlayerAlreadyPaused) {
-                      viewModel.pause()
-                    }
+                    pendingSeekPosition = initialVideoPosition
                     
                     // Show seekbar and start seeking mode (same as seekbar scrubbing)
                     viewModel.showSeekBar()
@@ -932,9 +927,10 @@ fun GestureHandler(
                     val maxDuration = duration?.toFloat() ?: 0f
                     val clampedPosition = targetPosition.coerceAtMost(maxDuration)
                     
-                    // Use the same seeking mechanism as seekbar scrubbing
-                    // This will update the seekbar position and provide live preview
-                    viewModel.seekTo(clampedPosition.toInt())
+                    pendingSeekPosition = clampedPosition
+                    // ThumbFast uses an independent decoder. Do not repeatedly
+                    // seek or pause the active player while the finger moves.
+                    viewModel.updateSeekThumbnailPreview(clampedPosition, maxDuration)
                     
                     // Format and display time position updates
                     val currentPos = clampedPosition.toInt()
@@ -963,6 +959,7 @@ fun GestureHandler(
               if (hasStartedSeeking) {
                 hasStartedSeeking = false
                 // Clean up seeking state without showing controls
+                viewModel.hideSeekThumbnailPreview()
                 viewModel.playerUpdate.update { PlayerUpdates.None }
                 viewModel.hideSeekBar()
               }
@@ -972,10 +969,8 @@ fun GestureHandler(
 
           // Apply the final seek when gesture ends
           if (hasStartedSeeking) {
-            // Unpause if it wasn't paused before seeking
-            if (!wasPlayerAlreadyPaused) {
-              viewModel.unpause()
-            }
+            pendingSeekPosition?.let { viewModel.seekTo(it.toInt()) }
+            viewModel.hideSeekThumbnailPreview()
             
             // Clear the horizontal seek update and hide seekbar after a short delay
             coroutineScope.launch {

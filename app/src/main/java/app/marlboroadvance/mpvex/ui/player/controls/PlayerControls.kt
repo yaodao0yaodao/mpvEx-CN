@@ -105,6 +105,7 @@ import app.marlboroadvance.mpvex.ui.player.PlayerUpdates
 import app.marlboroadvance.mpvex.ui.player.PlayerViewModel
 import app.marlboroadvance.mpvex.ui.player.Sheets
 import app.marlboroadvance.mpvex.ui.player.VideoAspect
+import app.marlboroadvance.mpvex.ui.player.VideoHdrType
 import app.marlboroadvance.mpvex.ui.player.controls.components.BrightnessSlider
 import app.marlboroadvance.mpvex.ui.player.controls.components.CompactSpeedIndicator
 import app.marlboroadvance.mpvex.ui.player.controls.components.ControlsButton
@@ -130,37 +131,35 @@ import org.koin.compose.koinInject
 import kotlin.math.abs
 
 private data class StatsPageSixSnapshot(
-  val title: String = "--",
   val decoder: String = "--",
   val renderer: String = "--",
   val video: String = "--",
-  val audio: String = "--",
   val fps: String = "-- / --",
   val dropped: Int = 0,
-  val hdr: String = "--",
+  val aiUpscale: String = "--",
 )
 
 @Composable
-private fun CustomStatsPageSixOverlay(modifier: Modifier = Modifier) {
+private fun CustomStatsPageSixOverlay(
+  viewModel: PlayerViewModel,
+  hdr: String,
+  profile: String,
+  modifier: Modifier = Modifier,
+) {
   val snapshot by produceState(initialValue = StatsPageSixSnapshot()) {
     while (true) {
       val sourceFps = MPVLib.getPropertyDouble("container-fps") ?: 0.0
       val renderFps = MPVLib.getPropertyDouble("estimated-vf-fps") ?: 0.0
-      val gamma = MPVLib.getPropertyString("video-params/gamma").orEmpty()
-      val primaries = MPVLib.getPropertyString("video-params/primaries").orEmpty()
-      val peak = MPVLib.getPropertyDouble("video-params/sig-peak") ?: 0.0
       value =
         StatsPageSixSnapshot(
-          title = MPVLib.getPropertyString("media-title") ?: "--",
           decoder = MPVLib.getPropertyString("hwdec-current") ?: "no（软件解码）",
           renderer = listOfNotNull(MPVLib.getPropertyString("current-vo"), MPVLib.getPropertyString("gpu-api")).joinToString(" / ").ifBlank { "--" },
           video = MPVLib.getPropertyString("video-codec") ?: "--",
-          audio = MPVLib.getPropertyString("audio-codec-name") ?: "--",
           fps = if (sourceFps > 0.0 || renderFps > 0.0) "%.2f / %.2f".format(renderFps, sourceFps) else "-- / --",
           // frame-drop-count is a real mpv property. The old drop-frame-count spelling
           // does not exist and was the source of recurring log errors.
           dropped = MPVLib.getPropertyInt("frame-drop-count") ?: 0,
-          hdr = if (gamma == "pq" || gamma == "hlg" || (primaries == "bt.2020" && peak > 1.0)) "HDR" else "SDR",
+          aiUpscale = viewModel.currentAiUpscaleStatus(),
         )
       delay(if (MPVLib.getPropertyBoolean("pause") == true) 2000L else 1000L)
     }
@@ -173,11 +172,12 @@ private fun CustomStatsPageSixOverlay(modifier: Modifier = Modifier) {
   ) {
     Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
       Text("播放诊断", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-      Text("文件：${snapshot.title}", color = Color.White, fontSize = 10.sp)
       Text("解码：${snapshot.decoder}", color = Color.White, fontSize = 10.sp)
       Text("渲染：${snapshot.renderer}", color = Color.White, fontSize = 10.sp)
-      Text("视频：${snapshot.video} · ${snapshot.hdr}", color = Color.White, fontSize = 10.sp)
-      Text("音频：${snapshot.audio}", color = Color.White, fontSize = 10.sp)
+      Text("视频：${snapshot.video}", color = Color.White, fontSize = 10.sp)
+      Text("超分：${snapshot.aiUpscale}", color = Color.White, fontSize = 10.sp)
+      Text("HDR：$hdr", color = Color.White, fontSize = 10.sp)
+      Text("MPV 配置档：$profile", color = Color.White, fontSize = 10.sp)
       Text("渲染 / 片源 FPS：${snapshot.fps}", color = Color.White, fontSize = 10.sp)
       Text("丢帧：${snapshot.dropped}", color = Color.White, fontSize = 10.sp)
     }
@@ -219,6 +219,19 @@ fun PlayerControls(
   val audioPreferences = koinInject<AudioPreferences>()
   val advancedPreferences = koinInject<AdvancedPreferences>()
   val statisticsPage by advancedPreferences.enabledStatisticsPage.collectAsState()
+  val runtimeProfile by viewModel.runtimeProfile.collectAsState()
+  val videoHdrType by viewModel.videoHdrType.collectAsState()
+  val sdrHdrBoostEnabled by viewModel.sdrHdrBoostEnabled.collectAsState()
+  val hardwarePlusMode by viewModel.hardwarePlusMode.collectAsState()
+  val runtimeProfileName = stringResource(runtimeProfile.titleRes)
+  val hdrStatus =
+    when (videoHdrType) {
+      VideoHdrType.PQ -> if (hardwarePlusMode) "HDR10 / PQ（直通）" else "HDR10 / PQ（线性 HDR）"
+      VideoHdrType.HLG -> if (hardwarePlusMode) "HLG（直通）" else "HLG（线性 HDR）"
+      VideoHdrType.BT2020 -> if (hardwarePlusMode) "BT.2020（直通）" else "BT.2020（线性 HDR）"
+      VideoHdrType.SDR -> if (sdrHdrBoostEnabled && !hardwarePlusMode) "SDR→HDR 增强" else "SDR"
+      VideoHdrType.UNKNOWN -> "识别中"
+    }
   val showSystemStatusBar by playerPreferences.showSystemStatusBar.collectAsState()
   val showSystemNavigationBar by playerPreferences.showSystemNavigationBar.collectAsState()
   val interactionSource = remember { MutableInteractionSource() }
@@ -365,6 +378,9 @@ fun PlayerControls(
 
         if (statisticsPage == 6) {
           CustomStatsPageSixOverlay(
+            viewModel = viewModel,
+            hdr = hdrStatus,
+            profile = runtimeProfileName,
             modifier = Modifier.constrainAs(customStats) {
               start.linkTo(parent.start, spacing.medium)
               top.linkTo(parent.top, spacing.medium)

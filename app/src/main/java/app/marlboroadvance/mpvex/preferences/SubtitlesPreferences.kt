@@ -39,7 +39,7 @@ class SubtitlesPreferences(
   val justification = preferenceStore.getEnum("sub_justify", SubtitleJustification.Auto)
   val subPos = preferenceStore.getInt("sub_pos", 100)
 
-  val overrideAssSubs = preferenceStore.getBoolean("sub_override_ass")
+  val overrideAssSubs = preferenceStore.getBoolean("sub_override_ass", true)
   val scaleByWindow = preferenceStore.getBoolean("sub_scale_by_window", true)
 
   val defaultSubDelay = preferenceStore.getInt("sub_default_delay")

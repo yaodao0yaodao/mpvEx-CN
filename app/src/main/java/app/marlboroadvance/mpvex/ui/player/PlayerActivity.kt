@@ -749,12 +749,14 @@ class PlayerActivity :
         "gpu_next" -> {
           val enabled = value.toDebugBoolean()
           decoderPreferences.gpuNext.set(enabled)
-          "persistent gpu_next=$enabled (restart player to apply renderer)"
+          restartForRendererSettings()
+          "persistent gpu_next=$enabled"
         }
         "vulkan" -> {
           val enabled = value.toDebugBoolean()
           decoderPreferences.useVulkan.set(enabled)
-          "persistent vulkan=$enabled (restart player to apply renderer)"
+          restartForRendererSettings()
+          "persistent vulkan=$enabled"
         }
         "hardware_plus_enabled" -> {
           val enabled = value.toDebugBoolean()
@@ -765,6 +767,10 @@ class PlayerActivity :
           val enabled = value.toDebugBoolean()
           MPVLib.command("script-message-to", "console", if (enabled) "enable" else "disable")
           "console=$enabled"
+        }
+        "property" -> {
+          val property = value?.takeIf { it.isNotBlank() } ?: error("property name is required")
+          "$property=${MPVLib.getPropertyString(property)}"
         }
         else -> error("unknown command: $command")
       }

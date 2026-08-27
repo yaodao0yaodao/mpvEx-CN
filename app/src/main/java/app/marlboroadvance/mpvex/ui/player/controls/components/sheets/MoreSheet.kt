@@ -95,7 +95,7 @@ fun MoreSheet(
         }
       }
 
-      Text("MPV 配置档（本次播放）", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+      Text("MPV 配置档（临时生效）", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
       LazyRow(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.smaller)) {
         items(MPVProfile.entries, key = { it.value }) { profile ->
           FilterChip(
@@ -107,53 +107,51 @@ fun MoreSheet(
       }
 
       Row(
-        modifier = Modifier.fillMaxWidth().clickable {
-          decoderPreferences.gpuNext.set(!gpuNext)
-          onRendererSettingChanged()
-        },
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.medium),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
       ) {
-        Column(Modifier.weight(1f)) {
+        Row(
+          modifier =
+            Modifier
+              .weight(1f)
+              .clickable {
+                decoderPreferences.gpuNext.set(!gpuNext)
+                onRendererSettingChanged()
+              },
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
           Text(stringResource(R.string.pref_decoder_gpu_next_title))
-          Text("与设置同步，永久生效", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-        }
-        Switch(
-          checked = gpuNext,
-          onCheckedChange = {
-            decoderPreferences.gpuNext.set(it)
-            onRendererSettingChanged()
-          },
-        )
-      }
-
-      Row(
-        modifier =
-          Modifier
-            .fillMaxWidth()
-            .clickable(enabled = !hardwarePlusMode) {
-              decoderPreferences.useVulkan.set(!useVulkan)
+          Switch(
+            checked = gpuNext,
+            onCheckedChange = {
+              decoderPreferences.gpuNext.set(it)
               onRendererSettingChanged()
             },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-      ) {
-        Column(Modifier.weight(1f)) {
-          Text(stringResource(R.string.pref_decoder_vulkan_title))
-          Text(
-            if (hardwarePlusMode) "硬件解码增强模式下临时不可用，永久设置未改变" else "与设置同步，永久生效",
-            style = MaterialTheme.typography.bodySmall,
-            color = if (hardwarePlusMode) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline,
           )
         }
-        Switch(
-          checked = useVulkan,
-          enabled = !hardwarePlusMode,
-          onCheckedChange = {
-            decoderPreferences.useVulkan.set(it)
-            onRendererSettingChanged()
-          },
-        )
+        Row(
+          modifier =
+            Modifier
+              .weight(1f)
+              .clickable(enabled = !hardwarePlusMode) {
+                decoderPreferences.useVulkan.set(!useVulkan)
+                onRendererSettingChanged()
+              },
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+          Text(stringResource(R.string.pref_decoder_vulkan_title))
+          Switch(
+            checked = useVulkan,
+            enabled = !hardwarePlusMode,
+            onCheckedChange = {
+              decoderPreferences.useVulkan.set(it)
+              onRendererSettingChanged()
+            },
+          )
+        }
       }
     }
   }

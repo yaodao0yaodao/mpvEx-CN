@@ -131,7 +131,7 @@ class MPVView(
         vulkanEnabled = decoderPreferences.useVulkan.get(),
         vulkanSupported = linearHdrSupported,
         anime4kActive = anime4kActive,
-        hdrActive = linearHdrSupported,
+        hdrActive = decoderPreferences.boostSdrToHdr.get(),
         hardwarePlusMode = hardwarePlusMode,
       )
     setVo(backend.videoOutput)
@@ -423,7 +423,7 @@ class MPVView(
         vulkanSupported = linearHdrSupported,
         anime4kActive =
           !hardwarePlusMode && decoderPreferences.enableAnime4K.get() && decoderPreferences.anime4kMode.get() != "OFF",
-        hdrActive = linearHdrSupported,
+        hdrActive = decoderPreferences.boostSdrToHdr.get(),
         hardwarePlusMode = hardwarePlusMode,
       )
     applyShaderStack(backend, runtime = true)
@@ -512,6 +512,19 @@ class MPVView(
 
   fun isAiUpscalingActive(): Boolean =
     isAnime4KConfigured() && !runtimeAnime4KSuppressed && hasAiUpscaleHeadroom()
+
+  fun currentAiUpscaleStatus(): String {
+    val selection = preferredAnime4KSelection()
+    if (selection.mode == Anime4KManager.Mode.OFF) return "关闭"
+    val modeName = context.getString(selection.mode.titleRes)
+    return when {
+      activeDecoder == Decoder.HWPlus -> "$modeName（硬件解码增强下不可用）"
+      runtimeAnime4KSuppressed -> "$modeName（自动控制临时关闭）"
+      !hasAiUpscaleHeadroom() -> "$modeName（缩放不足 1.3×）"
+      appliedShaderChain.isNullOrEmpty() -> "$modeName（未加载）"
+      else -> "$modeName（已启用）"
+    }
+  }
 
   private fun hasAiUpscaleHeadroom(): Boolean {
     val inputWidth =

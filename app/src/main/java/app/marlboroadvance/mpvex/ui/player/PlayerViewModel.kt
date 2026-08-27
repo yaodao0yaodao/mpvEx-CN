@@ -1371,34 +1371,44 @@ class PlayerViewModel(
           if (!_autoCropEnabled.value || appliedAutoCrop != null) return@launch
           val sourceWidth = MPVLib.getPropertyInt("video-params/w") ?: return@repeat
           val sourceHeight = MPVLib.getPropertyInt("video-params/h") ?: return@repeat
-          val detectedWidth = MPVLib.getPropertyInt("vf-metadata/mpvex_cropdetect/lavfi.cropdetect.w") ?: return@repeat
-          val detectedHeight = MPVLib.getPropertyInt("vf-metadata/mpvex_cropdetect/lavfi.cropdetect.h") ?: return@repeat
-          val detectedX = MPVLib.getPropertyInt("vf-metadata/mpvex_cropdetect/lavfi.cropdetect.x") ?: return@repeat
-          val detectedY = MPVLib.getPropertyInt("vf-metadata/mpvex_cropdetect/lavfi.cropdetect.y") ?: return@repeat
+          // lavfi exposes filter metadata as strings, even when the values are
+          // numeric. Reading these paths as MPV_FORMAT_INT64 always returned null.
+          fun cropValue(name: String): Int? =
+            MPVLib.getPropertyString("vf-metadata/mpvex_cropdetect/lavfi.cropdetect.$name")
+              ?.toDoubleOrNull()
+              ?.roundToInt()
+          val detectedWidth = cropValue("w") ?: return@repeat
+          val detectedHeight = cropValue("h") ?: return@repeat
+          val detectedX = cropValue("x") ?: return@repeat
+          val detectedY = cropValue("y") ?: return@repeat
 
           val leftCrop = detectedX.coerceAtLeast(0)
           val topCrop = detectedY.coerceAtLeast(0)
           val rightCrop = (sourceWidth - detectedX - detectedWidth).coerceAtLeast(0)
           val detectedBottomCrop = (sourceHeight - detectedY - detectedHeight).coerceAtLeast(0)
           // Burned-in subtitles are commonly placed inside the lower letterbox.
-          // cropdetect cannot know whether a subtitle will appear later, so keep
-          // a conservative 12% lower safe band. This intentionally under-crops
-          // very wide films instead of risking permanent subtitle loss.
-          val protectedBottom = (sourceHeight * 0.12f).roundToInt()
-          val bottomCrop = (detectedBottomCrop - protectedBottom).coerceAtLeast(0)
+          // Keep a lower safety band, then crop symmetrically so subtitle
+          // appearance cannot make the picture jump up and down.
+          val protectedBottom = (sourceHeight * 0.07f).roundToInt()
+          val safeBottomCrop = (detectedBottomCrop - protectedBottom).coerceAtLeast(0)
+          val verticalCrop = minOf(topCrop, safeBottomCrop)
           val cropWidth = (sourceWidth - leftCrop - rightCrop).coerceAtLeast(2)
-          val cropHeight = (sourceHeight - topCrop - bottomCrop).coerceAtLeast(2)
+          val cropHeight = (sourceHeight - verticalCrop * 2).coerceAtLeast(2)
           val removedFraction = 1f - (cropWidth.toFloat() * cropHeight / (sourceWidth.toFloat() * sourceHeight))
           if (removedFraction < 0.04f) return@repeat
 
-          val candidate = "$cropWidth:$cropHeight:$leftCrop:$topCrop"
+          // cropdetect may fluctuate by a couple of pixels due to compression
+          // noise. Quantization supplies the required temporal anti-jitter.
+          fun stablePixel(value: Int): Int = (value / 4) * 4
+          val candidate =
+            "${stablePixel(cropWidth)}:${stablePixel(cropHeight)}:${stablePixel(leftCrop)}:${stablePixel(verticalCrop)}"
           if (candidate == stableCandidate) {
             stableSamples++
           } else {
             stableCandidate = candidate
             stableSamples = 1
           }
-          if (stableSamples >= 12) {
+          if (stableSamples >= 6) {
             appliedAutoCrop = candidate
             MPVLib.command("vf", "add", "@mpvex_autocrop:crop=$candidate")
             MPVLib.command("vf", "remove", "@mpvex_cropdetect")
@@ -1422,6 +1432,9 @@ class PlayerViewModel(
     (host as? PlayerActivity)?.player?.setRuntimeAnime4KSuppressed(false)
     (host as? PlayerActivity)?.player?.applyAnime4KShaders()
   }
+
+  fun currentAiUpscaleStatus(): String =
+    (host as? PlayerActivity)?.player?.currentAiUpscaleStatus() ?: "--"
 
   private fun stopAutoCropDetection(removeCrop: Boolean) {
     autoCropJob?.cancel()

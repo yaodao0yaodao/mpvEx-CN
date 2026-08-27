@@ -14,6 +14,8 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -57,7 +59,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.draw.clip
@@ -73,9 +75,6 @@ import app.marlboroadvance.mpvex.ui.player.controls.LocalPlayerButtonsClickEvent
 import app.marlboroadvance.mpvex.ui.theme.spacing
 import app.marlboroadvance.mpvex.preferences.SeekbarStyle
 import dev.vivvvek.seeker.Segment
-import dev.vivvvek.seeker.Seeker
-import dev.vivvvek.seeker.SeekerDefaults
-import dev.vivvvek.seeker.rememberSeekerState
 import `is`.xyz.mpv.Utils
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
@@ -154,8 +153,6 @@ fun SeekbarWithTimers(
   // Animated position for smooth transitions
   val animatedPosition = remember { Animatable(position) }
   val scope = rememberCoroutineScope()
-  val seekerState = rememberSeekerState()
-  val seekerInteractionSource = remember { MutableInteractionSource() }
   var latestInteractionPosition by remember { mutableFloatStateOf(position) }
 
   // Only animate position updates when user is not interacting
@@ -189,49 +186,45 @@ fun SeekbarWithTimers(
         Modifier
           .weight(1f)
           .height(48.dp)
-          .padding(vertical = 8.dp), // Add vertical padding for larger touch area
+          .pointerInput(duration) {
+            val safeDuration = duration.takeIf { it.isFinite() && it > 0f } ?: return@pointerInput
+            awaitEachGesture {
+              val down = awaitFirstDown(requireUnconsumed = false)
+              var pointerId = down.id
+
+              fun updateTarget(x: Float) {
+                val target = (x / size.width.coerceAtLeast(1)) * safeDuration
+                val clamped = target.coerceIn(0f, safeDuration)
+                isUserInteracting = true
+                latestInteractionPosition = clamped
+                userPosition = clamped
+                onValueChange(clamped)
+              }
+
+              updateTarget(down.position.x)
+              down.consume()
+              do {
+                val event = awaitPointerEvent()
+                val change = event.changes.firstOrNull { it.id == pointerId }
+                  ?: event.changes.firstOrNull()
+                  ?: break
+                pointerId = change.id
+                if (change.pressed) {
+                  updateTarget(change.position.x)
+                  change.consume()
+                }
+              } while (event.changes.any { it.pressed })
+
+              val target = latestInteractionPosition.coerceIn(0f, safeDuration)
+              animatedPosition.snapTo(target)
+              userPosition = target
+              onValueChangeFinished(target)
+              isUserInteracting = false
+            }
+          }
+          .padding(vertical = 8.dp), // Keep the entire 48 dp container touchable.
       contentAlignment = Alignment.Center,
     ) {
-      val safeDuration = duration.takeIf { it.isFinite() && it > 0f } ?: 0f
-      val range = 0f..safeDuration.coerceAtLeast(0.1f)
-      val thumbPosition = (if (isUserInteracting) userPosition else animatedPosition.value).coerceIn(range)
-      Seeker(
-        state = seekerState,
-        value = position.coerceIn(range),
-        thumbValue = thumbPosition,
-        range = range,
-        progressStartPosition = (position / range.endInclusive).coerceIn(0f, 1f),
-        readAheadValue = position.coerceIn(range),
-        segments = emptyList(),
-        enabled = safeDuration > 0f,
-        interactionSource = seekerInteractionSource,
-        colors = SeekerDefaults.seekerColors(),
-        dimensions =
-          SeekerDefaults.seekerDimensions(
-            trackHeight = 0.dp,
-            progressHeight = 0.dp,
-            thumbRadius = 0.dp,
-            gap = 0.dp,
-          ),
-        onValueChange = { newPosition ->
-          val target = newPosition.coerceIn(0f, safeDuration)
-          isUserInteracting = true
-          latestInteractionPosition = target
-          userPosition = target
-          onValueChange(target)
-        },
-        onValueChangeFinished = {
-          val target = latestInteractionPosition.coerceIn(0f, safeDuration)
-          scope.launch {
-            animatedPosition.snapTo(target)
-            userPosition = target
-            onValueChangeFinished(target)
-            isUserInteracting = false
-          }
-        },
-        modifier = Modifier.fillMaxWidth().height(64.dp).graphicsLayer(alpha = 0f),
-      )
-      
       // Visual seekbar (smaller, centered)
       Box(
         modifier = Modifier
