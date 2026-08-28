@@ -762,7 +762,7 @@ fun PlayerControls(
         }
 
         AnimatedVisibility(
-          visible = (controlsShown || seekBarShown) && !areControlsLocked,
+          visible = controlsShown && !areControlsLocked,
           enter = fadeIn(playerControlsEnterAnimationSpec()),
           exit = fadeOut(playerControlsExitAnimationSpec()),
           modifier =
@@ -1003,7 +1003,7 @@ fun PlayerControls(
         }
 
         AnimatedVisibility(
-          visible = controlsShown && !areControlsLocked,
+          visible = (controlsShown || seekBarShown) && !areControlsLocked,
           enter =
             if (!reduceMotion) {
               slideInVertically(playerControlsEnterAnimationSpec()) { it } +
