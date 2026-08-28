@@ -16,7 +16,7 @@ object LowBatteryAdvisor {
     val builder =
       AlertDialog.Builder(activity)
         .setTitle("电量低于 30%")
-        .setMessage("硬件解码增强通常能以最低功耗播放高码率视频；它会停用 Vulkan、AI 超分辨率和 SDR→HDR 增强。")
+        .setMessage("硬件解码增强通常能以最低功耗播放高码率视频，并可与 Vulkan、AI 超分辨率等功能配合使用；部分设备在此解码模式下可能无法激活屏幕真实 HDR。")
         .setNegativeButton("不再提醒") { dialog, _ ->
           preferences.edit().putBoolean(KEY_DISABLED, true).apply()
           dialog.dismiss()
