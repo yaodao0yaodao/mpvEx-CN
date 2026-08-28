@@ -1438,10 +1438,16 @@ class PlayerViewModel(
           val topCrop = detectedY.coerceAtLeast(0)
           val rightCrop = (sourceWidth - detectedX - detectedWidth).coerceAtLeast(0)
           val detectedBottomCrop = (sourceHeight - detectedY - detectedHeight).coerceAtLeast(0)
-          // Burned-in subtitles are commonly placed inside the lower letterbox.
-          // Keep a lower safety band, then crop symmetrically so subtitle
-          // appearance cannot make the picture jump up and down.
-          val protectedBottom = (sourceHeight * 0.07f).roundToInt()
+          // Soft subtitles are composed by mpv after the video filter chain, so
+          // cropping the encoded letterbox cannot cut them off. Only reserve a
+          // lower safety band when no soft subtitle is selected and burned-in
+          // subtitles therefore cannot be ruled out. This intentionally favors
+          // a smaller crop for ambiguous hard-subbed material.
+          val hasSelectedSoftSubtitle =
+            (MPVLib.getPropertyInt("sid") ?: 0) > 0 ||
+              (MPVLib.getPropertyInt("secondary-sid") ?: 0) > 0
+          val protectedBottom =
+            if (hasSelectedSoftSubtitle) 0 else (sourceHeight * 0.07f).roundToInt()
           val safeBottomCrop = (detectedBottomCrop - protectedBottom).coerceAtLeast(0)
           val verticalCrop = minOf(topCrop, safeBottomCrop)
           val cropWidth = (sourceWidth - leftCrop - rightCrop).coerceAtLeast(2)
