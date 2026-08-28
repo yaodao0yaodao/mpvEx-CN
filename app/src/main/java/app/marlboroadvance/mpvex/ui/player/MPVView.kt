@@ -44,7 +44,7 @@ class MPVView(
   private var appliedShaderChain: String? = null
   private var hardwarePlusHdrShaderPaths: List<String> = emptyList()
   private var runtimeAnime4KSuppressed = false
-  private var forceLinearHdrForCurrentMedia = false
+  internal var forceLinearHdrForCurrentMedia = false
   private var initialRuntimeProfile = MPVProfile.Fast.value
 
   var isExiting = false

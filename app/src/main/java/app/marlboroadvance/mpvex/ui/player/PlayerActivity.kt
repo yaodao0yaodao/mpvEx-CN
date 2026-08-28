@@ -379,6 +379,7 @@ class PlayerActivity :
       intent.getStringExtra(EXTRA_DECODER_OVERRIDE)?.let { value ->
         Decoder.priorityModes.firstOrNull { it.value == value }
       }
+    player.forceLinearHdrForCurrentMedia = intent.getBooleanExtra(EXTRA_FORCE_LINEAR_HDR, false)
     val firstDecoder = player.decoderOverride ?: decoderPreferences.effectiveDecoderPriority().firstOrNull() ?: Decoder.HW
     if (!intent.hasExtra(EXTRA_DECODER_FALLBACK_FIRST)) {
       intent.putExtra(EXTRA_DECODER_FALLBACK_FIRST, firstDecoder.value)
@@ -826,6 +827,7 @@ class PlayerActivity :
 
       val restartIntent = Intent(intent).apply {
         putExtra(EXTRA_DECODER_OVERRIDE, decoder.value)
+        putExtra(EXTRA_FORCE_LINEAR_HDR, player.forceLinearHdrForCurrentMedia)
         putExtra("playlist_index", playlistIndex)
         if (playlistIndex in playlist.indices) {
           action = Intent.ACTION_VIEW
@@ -3734,6 +3736,7 @@ class PlayerActivity :
       private set
 
     private const val EXTRA_DECODER_OVERRIDE = "mpvex.decoder_override"
+    private const val EXTRA_FORCE_LINEAR_HDR = "mpvex.force_linear_hdr"
     private const val EXTRA_RESUME_PLAYING = "mpvex.resume_playing"
     private const val EXTRA_AUTOMATIC_DECODER_BASELINE = "mpvex.automatic_decoder_baseline"
     private const val EXTRA_AUTOMATIC_DECODER_MEDIA = "mpvex.automatic_decoder_media"
