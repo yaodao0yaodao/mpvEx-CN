@@ -321,11 +321,16 @@ class MPVView(
     MPVLib.setOptionString("audio-delay", (audioPreferences.defaultAudioDelay.get() / 1000.0).toString())
     MPVLib.setOptionString("audio-pitch-correction", "yes")
     MPVLib.setOptionString("volume-max", (audioPreferences.volumeBoostCap.get() + 100).toString())
-    
-    // Volume normalization using dynamic audio normalization filter
-    if (audioPreferences.volumeNormalization.get()) {
-      MPVLib.setOptionString("af", "dynaudnorm")
+
+    // mpv normally inserts scaletempo2 only when speed first leaves 1.0x,
+    // rebuilding the audio filter graph and causing a visible one-off hitch.
+    // Keep it preloaded at 1.0x so speed changes reuse the existing graph while
+    // retaining mandatory pitch correction.
+    val audioFilters = buildList {
+      add("scaletempo2")
+      if (audioPreferences.volumeNormalization.get()) add("dynaudnorm")
     }
+    MPVLib.setOptionString("af", audioFilters.joinToString(","))
   }
 
   // Setup
