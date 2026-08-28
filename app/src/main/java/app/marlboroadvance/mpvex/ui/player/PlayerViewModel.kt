@@ -1452,6 +1452,21 @@ class PlayerViewModel(
           val verticalCrop = minOf(topCrop, safeBottomCrop)
           val cropWidth = (sourceWidth - leftCrop - rightCrop).coerceAtLeast(2)
           val cropHeight = (sourceHeight - verticalCrop * 2).coerceAtLeast(2)
+          // Scene content can contain temporary black regions (for example a
+          // portrait phone recording embedded in a landscape movie). Never let
+          // those regions masquerade as permanent letterboxing. Conventional
+          // 2.39:1-in-16:9 and 4:3-in-16:9 bars retain roughly 74–75% of one
+          // dimension; the 65% floor leaves headroom while rejecting destructive
+          // crops. Also reject an orientation flip outright.
+          val retainedWidth = cropWidth.toFloat() / sourceWidth
+          val retainedHeight = cropHeight.toFloat() / sourceHeight
+          val sourceLandscape = sourceWidth >= sourceHeight
+          val cropLandscape = cropWidth >= cropHeight
+          if (retainedWidth < 0.65f || retainedHeight < 0.65f || sourceLandscape != cropLandscape) {
+            stableCandidate = null
+            stableSamples = 0
+            return@repeat
+          }
           val removedFraction = 1f - (cropWidth.toFloat() * cropHeight / (sourceWidth.toFloat() * sourceHeight))
           if (removedFraction < 0.04f) return@repeat
 
