@@ -44,6 +44,7 @@ class MPVView(
   private var appliedShaderChain: String? = null
   private var hardwarePlusHdrShaderPaths: List<String> = emptyList()
   private var runtimeAnime4KSuppressed = false
+  private var forceLinearHdrForCurrentMedia = false
   private var initialRuntimeProfile = MPVProfile.Fast.value
 
   var isExiting = false
@@ -126,31 +127,26 @@ class MPVView(
     MPVLib.setOptionString("profile", runtimeProfile)
     val linearHdrSupported = VulkanCapabilities.isDeviceSupported(context)
     val anime4kActive =
-      !hardwarePlusMode && decoderPreferences.enableAnime4K.get() && decoderPreferences.anime4kMode.get() != "OFF"
+      decoderPreferences.enableAnime4K.get() && decoderPreferences.anime4kMode.get() != "OFF"
     val backend =
       selectRendererBackend(
         gpuNextEnabled = decoderPreferences.gpuNext.get(),
         vulkanEnabled = decoderPreferences.useVulkan.get(),
         vulkanSupported = linearHdrSupported,
         anime4kActive = anime4kActive,
-        hdrActive = decoderPreferences.boostSdrToHdr.get(),
-        hardwarePlusMode = hardwarePlusMode,
+        hdrActive = decoderPreferences.boostSdrToHdr.get() || forceLinearHdrForCurrentMedia,
       )
     setVo(backend.videoOutput)
     MPVLib.setOptionString("gpu-api", backend.gpuApi)
     MPVLib.setOptionString("gpu-context", backend.gpuContext)
 
-    if (hardwarePlusMode) {
-      applyHardwarePlusHdrOutputOptions(VideoHdrType.UNKNOWN, runtime = false)
-    } else {
-      val hdrPipelineReady = backend.videoOutput == "gpu-next" && backend.gpuApi == "vulkan"
-      applyLinearHdrOutputOptions(
-        pipelineReady = hdrPipelineReady,
-        // The source is still unknown here. Enabling inverse tone mapping before
-        // detecting SDR can make the first HDR frames appear washed out.
-        boostSdrToHdr = false,
-      )
-    }
+    val hdrPipelineReady = backend.videoOutput == "gpu-next" && backend.gpuApi == "vulkan"
+    applyLinearHdrOutputOptions(
+      pipelineReady = hdrPipelineReady,
+      // The source is still unknown here. Enabling inverse tone mapping before
+      // detecting SDR can make the first HDR frames appear washed out.
+      boostSdrToHdr = false,
+    )
 
     // HW+ is a distinct zero-copy/OpenGL mode. The regular renderer must not try
     // mediacodec first, otherwise Vulkan silently turns the selection into a copy path.
@@ -325,13 +321,15 @@ class MPVView(
     // App will handle track selection manually via TrackSelector to respect user choices
     MPVLib.setOptionString("alang", "")
     MPVLib.setOptionString("audio-delay", (audioPreferences.defaultAudioDelay.get() / 1000.0).toString())
-    MPVLib.setOptionString("audio-pitch-correction", "yes")
+    // Keep one explicit scaletempo2 filter alive for the whole playback. If
+    // automatic pitch correction is also enabled, mpv may insert/remove a
+    // second implicit filter as speed leaves 1.0x, rebuilding the audio graph
+    // and causing the first speed change to hitch.
+    MPVLib.setOptionString("audio-pitch-correction", "no")
     MPVLib.setOptionString("volume-max", (audioPreferences.volumeBoostCap.get() + 100).toString())
 
-    // mpv normally inserts scaletempo2 only when speed first leaves 1.0x,
-    // rebuilding the audio filter graph and causing a visible one-off hitch.
-    // Keep it preloaded at 1.0x so speed changes reuse the existing graph while
-    // retaining mandatory pitch correction.
+    // This explicit instance provides the mandatory pitch correction without
+    // changing the filter graph when playback speed changes.
     val audioFilters = buildList {
       add("scaletempo2")
       if (audioPreferences.volumeNormalization.get()) add("dynaudnorm")
@@ -425,17 +423,14 @@ class MPVView(
 
 
   fun applyAnime4KShaders() {
-    val hardwarePlusMode = activeDecoder == Decoder.HWPlus
     val linearHdrSupported = VulkanCapabilities.isDeviceSupported(context)
     val backend =
       selectRendererBackend(
         gpuNextEnabled = decoderPreferences.gpuNext.get(),
         vulkanEnabled = decoderPreferences.useVulkan.get(),
         vulkanSupported = linearHdrSupported,
-        anime4kActive =
-          !hardwarePlusMode && decoderPreferences.enableAnime4K.get() && decoderPreferences.anime4kMode.get() != "OFF",
-        hdrActive = decoderPreferences.boostSdrToHdr.get(),
-        hardwarePlusMode = hardwarePlusMode,
+        anime4kActive = decoderPreferences.enableAnime4K.get() && decoderPreferences.anime4kMode.get() != "OFF",
+        hdrActive = decoderPreferences.boostSdrToHdr.get() || forceLinearHdrForCurrentMedia,
       )
     applyShaderStack(backend, runtime = true)
   }
@@ -447,8 +442,7 @@ class MPVView(
   }
 
   fun isAnime4KConfigured(): Boolean =
-    activeDecoder != Decoder.HWPlus &&
-      decoderPreferences.enableAnime4K.get() &&
+    decoderPreferences.enableAnime4K.get() &&
       decoderPreferences.anime4kMode.get() != Anime4KManager.Mode.OFF.name
 
   private fun applyShaderStack(
@@ -475,6 +469,22 @@ class MPVView(
     MPVLib.getPropertyString("current-vo") == "gpu-next" &&
       MPVLib.getPropertyString("gpu-api") == "vulkan"
 
+  /**
+   * Records whether this source needs the real linear-HDR backend. Returns true
+   * only when the renderer must be recreated to install/remove the temporary
+   * gpu-next + Vulkan override; saved renderer preferences are never changed.
+   */
+  fun updateLinearHdrRequirement(sourceType: VideoHdrType): Boolean {
+    val required = activeDecoder != Decoder.HWPlus && sourceType.dynamicRange == VideoDynamicRange.HDR
+    if (required == forceLinearHdrForCurrentMedia) return false
+    forceLinearHdrForCurrentMedia = required
+    val featureStillForcesBackend =
+      decoderPreferences.boostSdrToHdr.get() ||
+        (decoderPreferences.enableAnime4K.get() && decoderPreferences.anime4kMode.get() != Anime4KManager.Mode.OFF.name)
+    val shouldUseForcedBackend = required || featureStillForcesBackend
+    return isLinearHdrPipelineActive() != shouldUseForcedBackend
+  }
+
   fun currentVideoHdrType(): VideoHdrType =
     classifyVideoHdrType(
       transfer = MPVLib.getPropertyString("video-params/gamma"),
@@ -494,7 +504,7 @@ class MPVView(
   }
 
   private fun anime4kShaderPaths(backend: RendererBackend): List<String> {
-    if (activeDecoder == Decoder.HWPlus || runtimeAnime4KSuppressed) return emptyList()
+    if (runtimeAnime4KSuppressed) return emptyList()
     if (!decoderPreferences.enableAnime4K.get()) return emptyList()
     if (backend.videoOutput == "gpu-next" && backend.gpuApi != "vulkan") return emptyList()
     if (!anime4kManager.initialize()) return emptyList()
@@ -533,7 +543,6 @@ class MPVView(
     if (selection.mode == Anime4KManager.Mode.OFF) return "关闭"
     val modeName = context.getString(selection.mode.titleRes)
     return when {
-      activeDecoder == Decoder.HWPlus -> "$modeName（硬件解码增强下不可用）"
       runtimeAnime4KSuppressed -> "$modeName（自动控制临时关闭）"
       !hasAiUpscaleHeadroom() -> "$modeName（缩放不足 1.3×）"
       appliedShaderChain.isNullOrEmpty() -> "$modeName（未加载）"

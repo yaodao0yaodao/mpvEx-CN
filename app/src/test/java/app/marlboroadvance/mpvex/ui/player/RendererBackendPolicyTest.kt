@@ -19,10 +19,10 @@ class RendererBackendPolicyTest {
   }
 
   @Test
-  fun `Anime4K avoids unsupported gpu-next OpenGL combination`() {
+  fun `Anime4K falls back to saved OpenGL backend without Vulkan support`() {
     val backend = selectRendererBackend(true, false, false, true, false)
 
-    assertEquals(RendererBackend("gpu", "opengl", "android"), backend)
+    assertEquals(RendererBackend("gpu-next", "opengl", "android"), backend)
   }
 
   @Test
@@ -33,10 +33,10 @@ class RendererBackendPolicyTest {
   }
 
   @Test
-  fun `hardware plus keeps gpu-next but forces Android OpenGL`() {
-    val backend = selectRendererBackend(true, true, true, true, true, hardwarePlusMode = true)
+  fun `AI or HDR force gpu-next Vulkan independently of decoder`() {
+    val backend = selectRendererBackend(false, false, true, true, true)
 
-    assertEquals(RendererBackend("gpu-next", "opengl", "android"), backend)
+    assertEquals(RendererBackend("gpu-next", "vulkan", "androidvk"), backend)
   }
 
   @Test

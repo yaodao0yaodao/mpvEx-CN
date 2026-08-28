@@ -43,20 +43,13 @@ internal fun selectRendererBackend(
   vulkanSupported: Boolean,
   anime4kActive: Boolean,
   hdrActive: Boolean,
-  hardwarePlusMode: Boolean = false,
 ): RendererBackend {
-  // HW+ keeps gpu-next when requested, but uses the OpenGL path because Vulkan,
-  // linear HDR and Anime4K are suspended for this playback mode.
-  if (hardwarePlusMode) {
-    return RendererBackend(if (gpuNextEnabled) "gpu-next" else "gpu", "opengl", "android")
-  }
-
-  val useVulkan = vulkanSupported && (vulkanEnabled || hdrActive)
-  val useGpuNext = gpuNextEnabled || hdrActive
-
-  if (anime4kActive && useGpuNext && !useVulkan && !hdrActive) {
-    return RendererBackend("gpu", "opengl", "android")
-  }
+  // Linear HDR and AI upscaling temporarily require gpu-next + Vulkan. The
+  // decoder is deliberately irrelevant: HW+ is compatible with the shader
+  // pipeline, though its zero-copy path cannot activate real display HDR.
+  val forceGpuNextVulkan = vulkanSupported && (anime4kActive || hdrActive)
+  val useVulkan = vulkanSupported && (vulkanEnabled || forceGpuNextVulkan)
+  val useGpuNext = gpuNextEnabled || forceGpuNextVulkan
   if (useGpuNext && useVulkan) return RendererBackend("gpu-next", "vulkan", "androidvk")
   if (useGpuNext) return RendererBackend("gpu-next", "opengl", "android")
   if (useVulkan) return RendererBackend("gpu", "vulkan", "androidvk")

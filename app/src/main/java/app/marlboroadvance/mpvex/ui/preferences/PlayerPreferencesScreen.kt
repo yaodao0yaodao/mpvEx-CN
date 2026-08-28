@@ -93,6 +93,16 @@ object PlayerPreferencesScreen : Screen {
                   ) 
                 },
               )
+
+              PreferenceDivider()
+
+              val autoCropBlackBars by preferences.autoCropBlackBars.collectAsState()
+              SwitchPreference(
+                value = autoCropBlackBars,
+                onValueChange = preferences.autoCropBlackBars::set,
+                title = { Text(stringResource(R.string.pref_player_auto_crop_black_bars)) },
+                summary = { Text(stringResource(R.string.pref_player_auto_crop_black_bars_summary)) },
+              )
               
               PreferenceDivider()
               

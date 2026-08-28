@@ -25,7 +25,6 @@ import org.koin.compose.koinInject
 
 @Composable
 fun AiUpscaleSheet(
-  hardwarePlusMode: Boolean,
   onChanged: () -> Unit,
   onDismissRequest: () -> Unit,
 ) {
@@ -41,16 +40,9 @@ fun AiUpscaleSheet(
       verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.small),
     ) {
       Text("AI 超分辨率", style = MaterialTheme.typography.headlineMedium)
-      if (hardwarePlusMode) {
-        Text(
-          "硬件解码增强模式下 Anime4K / ArtCNN 不可用。切换解码器后会恢复当前选择。",
-          color = MaterialTheme.colorScheme.error,
-        )
-      }
-
       Anime4KManager.Mode.entries.forEach { option ->
         Row(
-          modifier = Modifier.fillMaxWidth().clickable(enabled = !hardwarePlusMode) {
+          modifier = Modifier.fillMaxWidth().clickable {
             preferences.anime4kMode.set(option.name)
             onChanged()
           }.padding(vertical = MaterialTheme.spacing.extraSmall),
@@ -58,7 +50,6 @@ fun AiUpscaleSheet(
         ) {
           RadioButton(
             selected = mode == option,
-            enabled = !hardwarePlusMode,
             onClick = {
               preferences.anime4kMode.set(option.name)
               onChanged()
@@ -72,7 +63,7 @@ fun AiUpscaleSheet(
         Text("Anime4K 质量档", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
         Anime4KManager.Quality.entries.forEach { option ->
           Row(
-            modifier = Modifier.fillMaxWidth().clickable(enabled = !hardwarePlusMode) {
+            modifier = Modifier.fillMaxWidth().clickable {
               preferences.anime4kQuality.set(option.name)
               onChanged()
             }.padding(vertical = MaterialTheme.spacing.extraSmall),
@@ -80,7 +71,6 @@ fun AiUpscaleSheet(
           ) {
             RadioButton(
               selected = quality == option,
-              enabled = !hardwarePlusMode,
               onClick = {
                 preferences.anime4kQuality.set(option.name)
                 onChanged()

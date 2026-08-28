@@ -36,9 +36,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,7 +52,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
@@ -204,6 +205,10 @@ class PlayerViewModel(
     val duration: Float,
     val requestId: Long,
   )
+  private data class SeekThumbnailLoadResult(
+    val bitmap: Bitmap? = null,
+    val capacityBlocked: Boolean = false,
+  )
   @Volatile private var pinnedSeekThumbnailSource: String? = null
   private var pendingSeekThumbnailRequest: SeekThumbnailRequest? = null
   private var seekThumbnailWorkerJob: Job? = null
@@ -252,13 +257,29 @@ class PlayerViewModel(
   }
 
   private fun ensureSeekThumbnailWorker() {
-    if (seekThumbnailWorkerJob?.isActive == true) return
-    seekThumbnailWorkerJob =
-      viewModelScope.launch(seekThumbnailDispatcher) {
-        while (isActive) {
-          val request = synchronized(seekThumbnailRequestLock) { pendingSeekThumbnailRequest.also { pendingSeekThumbnailRequest = null } } ?: break
+    synchronized(seekThumbnailRequestLock) {
+      if (seekThumbnailWorkerJob?.isActive == true) return
+      seekThumbnailWorkerJob =
+        viewModelScope.launch(seekThumbnailDispatcher) {
+          while (isActive) {
+            val request =
+              synchronized(seekThumbnailRequestLock) {
+                pendingSeekThumbnailRequest.also {
+                  pendingSeekThumbnailRequest = null
+                  if (it == null) seekThumbnailWorkerJob = null
+                }
+              } ?: return@launch
           val key = seekThumbnailCacheKey(request.source, request.bucket)
-          val bitmap = loadSeekThumbnail(request)
+          val result = loadSeekThumbnail(request)
+          val bitmap = result.bitmap
+          if (result.capacityBlocked && request.requestId == seekThumbnailRequestId) {
+            synchronized(seekThumbnailRequestLock) {
+              val pending = pendingSeekThumbnailRequest
+              if (pending == null || pending.requestId < request.requestId) pendingSeekThumbnailRequest = request
+            }
+            awaitSeekThumbnailDecodeSlot()
+            continue
+          }
           if (bitmap != null && request.requestId == seekThumbnailRequestId) {
             _seekThumbnailPreview.update { if (it.visible) it.copy(bitmap = bitmap, isLoading = false) else it }
           } else if (request.requestId == seekThumbnailRequestId && !seekThumbnailDecodes.containsKey(key)) {
@@ -267,14 +288,33 @@ class PlayerViewModel(
           if (lastQueuedSeekThumbnailKey == key) lastQueuedSeekThumbnailKey = null
         }
       }
+    }
   }
 
-  private suspend fun loadSeekThumbnail(request: SeekThumbnailRequest): Bitmap? {
+  private suspend fun awaitSeekThumbnailDecodeSlot() {
+    val inFlight = seekThumbnailDecodes.values.toList()
+    if (inFlight.isEmpty()) return
+    select { inFlight.forEach { decode -> decode.onJoin { } } }
+  }
+
+  private suspend fun loadSeekThumbnail(request: SeekThumbnailRequest): SeekThumbnailLoadResult {
     val key = seekThumbnailCacheKey(request.source, request.bucket)
-    seekThumbnailCache.get(key)?.let { return it }
-    if (seekThumbnailFailures[key]?.let { SystemClock.elapsedRealtime() - it < 10_000L } == true) return null
-    val decode = seekThumbnailDecodes[key] ?: startSeekThumbnailDecode(request, key) ?: return null
-    return withTimeoutOrNull(2_500L) { decode.await() }
+    seekThumbnailCache.get(key)?.let { return SeekThumbnailLoadResult(it) }
+    if (seekThumbnailFailures[key]?.let { SystemClock.elapsedRealtime() - it < 10_000L } == true) {
+      return SeekThumbnailLoadResult()
+    }
+    val decode = seekThumbnailDecodes[key] ?: startSeekThumbnailDecode(request, key)
+      ?: return SeekThumbnailLoadResult(capacityBlocked = true)
+    return SeekThumbnailLoadResult(
+      withTimeoutOrNull(2_500L) {
+        try {
+          decode.await()
+        } catch (cancellation: kotlinx.coroutines.CancellationException) {
+          currentCoroutineContext().ensureActive()
+          null
+        }
+      },
+    )
   }
 
   private fun startSeekThumbnailDecode(request: SeekThumbnailRequest, key: String): Deferred<Bitmap?>? {
@@ -286,9 +326,8 @@ class PlayerViewModel(
       viewModelScope.async(Dispatchers.IO) {
         val bitmap =
           try {
-            withTimeout(20_000L) { FastThumbnails.generateAsync(request.source, time.toDouble(), 320, useHwDec = true) }
-          } catch (_: TimeoutCancellationException) {
-            null
+            if (!FastThumbnails.isInitialized()) FastThumbnails.initialize(host.context)
+            generateSeekThumbnail(request.source, time)
           } catch (cancellation: kotlinx.coroutines.CancellationException) {
             throw cancellation
           } catch (_: Exception) {
@@ -311,6 +350,16 @@ class PlayerViewModel(
     seekThumbnailDecodes[key] = decode
     decode.invokeOnCompletion { seekThumbnailDecodes.remove(key, decode) }
     return decode
+  }
+
+  private suspend fun generateSeekThumbnail(source: String, time: Float): Bitmap? {
+    if (source.startsWith("content://", ignoreCase = true)) {
+      val descriptor = host.hostContentResolver.openFileDescriptor(Uri.parse(source), "r") ?: return null
+      descriptor.use {
+        return FastThumbnails.generateAsync("/proc/self/fd/${it.fd}", time.toDouble(), 320, useHwDec = false)
+      }
+    }
+    return FastThumbnails.generateAsync(source, time.toDouble(), 320, useHwDec = false)
   }
 
   private fun resolveSeekThumbnailSource(): String? {
@@ -379,6 +428,8 @@ class PlayerViewModel(
   private var automaticAnimeSuppressed = false
   private var automaticBrightnessMemorySuppressed = false
   private var automaticHdrSuppressed = false
+  private val _automaticControlStatus = MutableStateFlow("未介入")
+  val automaticControlStatus: StateFlow<String> = _automaticControlStatus.asStateFlow()
   private val _runtimeProfile =
     MutableStateFlow(
       if (host.activeDecoder == Decoder.SW || host.activeDecoder == Decoder.HWPlus) MPVProfile.Fast
@@ -494,7 +545,7 @@ class PlayerViewModel(
   // Video aspect ratio (now persisted via preferences)
   private val _videoAspect = MutableStateFlow(playerPreferences.defaultVideoAspect.get())
   val videoAspect: StateFlow<VideoAspect> = _videoAspect.asStateFlow()
-  private val _autoCropEnabled = MutableStateFlow(false)
+  private val _autoCropEnabled = MutableStateFlow(playerPreferences.autoCropBlackBars.get())
   val autoCropEnabled: StateFlow<Boolean> = _autoCropEnabled.asStateFlow()
   private var autoCropJob: Job? = null
   private var appliedAutoCrop: String? = null
@@ -1354,6 +1405,7 @@ class PlayerViewModel(
   }
 
   fun setAutoCropEnabled(enabled: Boolean) {
+    playerPreferences.autoCropBlackBars.set(enabled)
     if (_autoCropEnabled.value == enabled) return
     _autoCropEnabled.value = enabled
     if (enabled) startAutoCropDetection() else stopAutoCropDetection(removeCrop = true)
@@ -1430,7 +1482,10 @@ class PlayerViewModel(
   fun refreshAiUpscale() {
     automaticAnimeSuppressed = false
     (host as? PlayerActivity)?.player?.setRuntimeAnime4KSuppressed(false)
-    (host as? PlayerActivity)?.player?.applyAnime4KShaders()
+    // AI modes may temporarily require gpu-next + Vulkan. Recreate the renderer
+    // while preserving playback state so disabling AI can restore the user's
+    // saved backend choices as well.
+    (host as? PlayerActivity)?.restartForRendererSettings()
   }
 
   fun currentAiUpscaleStatus(): String =
@@ -1440,22 +1495,19 @@ class PlayerViewModel(
     val linear = (host as? PlayerActivity)?.player?.isLinearHdrPipelineActive() == true
     return when (_videoHdrType.value) {
       VideoHdrType.PQ -> when {
-        _hardwarePlusMode.value -> "HDR10 / PQ（直通）"
         linear -> "HDR10 / PQ（线性 HDR）"
         else -> "HDR10 / PQ（自动 HDR 输出）"
       }
       VideoHdrType.HLG -> when {
-        _hardwarePlusMode.value -> "HLG（直通）"
         linear -> "HLG（线性 HDR）"
         else -> "HLG（自动 HDR 输出）"
       }
       VideoHdrType.BT2020 -> when {
-        _hardwarePlusMode.value -> "BT.2020（直通）"
         linear -> "BT.2020（线性 HDR）"
         else -> "BT.2020（自动 HDR 输出）"
       }
       VideoHdrType.SDR ->
-        if (_sdrHdrBoostEnabled.value && !_hardwarePlusMode.value && linear) "SDR→HDR 增强" else "SDR"
+        if (_sdrHdrBoostEnabled.value && linear) "SDR→HDR 增强" else "SDR"
       VideoHdrType.UNKNOWN -> "识别中"
     }
   }
@@ -2411,6 +2463,9 @@ class PlayerViewModel(
 
   private fun logAutomaticAdjustment(message: String) {
     Log.i(TAG, "AutomaticControl: $message")
+    _automaticControlStatus.value =
+      if (_automaticControlStatus.value == "未介入") message
+      else "${_automaticControlStatus.value}；$message"
     playerUpdate.value = PlayerUpdates.ShowText("自动控制：$message")
   }
 
@@ -2429,6 +2484,7 @@ class PlayerViewModel(
     automaticAnimeSuppressed = false
     automaticBrightnessMemorySuppressed = false
     automaticHdrSuppressed = false
+    _automaticControlStatus.value = "未介入"
     (host as? PlayerActivity)?.player?.setRuntimeAnime4KSuppressed(false)
     resetLowFpsObservation()
     return (host as? PlayerActivity)?.restoreAutomaticDecoderIfNeeded(stateAlreadySaved = true) == true
@@ -2460,7 +2516,7 @@ class PlayerViewModel(
     _videoHdrType.value = hdrType
     _videoDynamicRange.value = dynamicRange
     applySdrHdrBoostIfChanged(
-      !hardwarePlusMode.value && dynamicRange == VideoDynamicRange.SDR && _sdrHdrBoostEnabled.value,
+      dynamicRange == VideoDynamicRange.SDR && _sdrHdrBoostEnabled.value,
     )
   }
 
@@ -2470,9 +2526,7 @@ class PlayerViewModel(
     _hardwarePlusMode.value = hardwarePlus
     appliedSdrHdrBoost = false
     host.switchDecoder(decoder)
-    if (!hardwarePlus) {
-      updateVideoHdrType(videoHdrType.value, forceApply = true)
-    }
+    updateVideoHdrType(videoHdrType.value, forceApply = true)
   }
 
   private var hardwarePlusRejectedForCurrentFile = false
@@ -2496,18 +2550,6 @@ class PlayerViewModel(
       (host as? PlayerActivity)?.wasHardwarePlusRejectedForCurrentMedia() != true
 
   fun toggleHdrPlayback() {
-    if (hardwarePlusMode.value) {
-      val message =
-        when (videoHdrType.value) {
-          VideoHdrType.PQ -> host.context.getString(R.string.player_hwplus_hdr_pq)
-          VideoHdrType.HLG -> host.context.getString(R.string.player_hwplus_hdr_hlg)
-          VideoHdrType.BT2020 -> host.context.getString(R.string.player_hwplus_hdr_bt2020)
-          VideoHdrType.SDR -> host.context.getString(R.string.player_hwplus_sdr_hdr_unavailable)
-          VideoHdrType.UNKNOWN -> host.context.getString(R.string.player_hwplus_hdr_identifying)
-        }
-      playerUpdate.value = PlayerUpdates.ShowText(message)
-      return
-    }
     if (!hdrPipelineAvailable) {
       playerUpdate.value = PlayerUpdates.ShowText("此设备不支持线性 HDR")
       return
@@ -2522,7 +2564,9 @@ class PlayerViewModel(
         val enabled = !_sdrHdrBoostEnabled.value
         _sdrHdrBoostEnabled.value = enabled
         decoderPreferences.boostSdrToHdr.set(enabled)
-        applySdrHdrBoostIfChanged(enabled)
+        // The saved renderer settings stay untouched; a playback restart only
+        // installs/removes the temporary gpu-next + Vulkan override.
+        (host as? PlayerActivity)?.restartForRendererSettings()
         playerUpdate.value = PlayerUpdates.ShowText(if (enabled) "SDR 增强 HDR 已开启" else "SDR 增强 HDR 已关闭")
       }
       VideoDynamicRange.UNKNOWN -> playerUpdate.value = PlayerUpdates.ShowText("正在识别视频动态范围")

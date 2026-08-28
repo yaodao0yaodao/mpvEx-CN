@@ -235,23 +235,18 @@ fun PlayerSheets(
     }
 
     Sheets.AiUpscale -> {
-      val hardwarePlusMode by viewModel.hardwarePlusMode.collectAsState()
       AiUpscaleSheet(
-        hardwarePlusMode = hardwarePlusMode,
         onChanged = viewModel::refreshAiUpscale,
         onDismissRequest = onDismissRequest,
       )
     }
 
     Sheets.More -> {
-      val hardwarePlusMode by viewModel.hardwarePlusMode.collectAsState()
       val runtimeProfile by viewModel.runtimeProfile.collectAsState()
       MoreSheet(
         currentProfile = runtimeProfile,
         onProfileChanged = viewModel::applyRuntimeProfile,
-        onRendererSettingChanged = { playerActivity?.restartForRendererSettings() },
         onDismissRequest = onDismissRequest,
-        hardwarePlusMode = hardwarePlusMode,
       )
     }
 

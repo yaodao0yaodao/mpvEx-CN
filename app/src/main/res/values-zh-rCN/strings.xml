@@ -132,6 +132,8 @@
   <string name="pref_player">播放器</string>
   <string name="pref_player_summary">方向、手势与控制</string>
   <string name="pref_player_orientation">屏幕方向</string>
+  <string name="pref_player_auto_crop_black_bars">自动剪切黑边</string>
+  <string name="pref_player_auto_crop_black_bars_summary">保守识别稳定黑边，并尽量保留硬字幕所在区域</string>
   <string name="pref_player_orientation_free">自由旋转</string>
   <string name="pref_player_orientation_video">跟随视频</string>
   <string name="pref_player_orientation_portrait">竖屏</string>

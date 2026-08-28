@@ -345,15 +345,10 @@ fun RenderPlayerButton(
     PlayerButton.HDR_MODE -> {
       val dynamicRange by viewModel.videoDynamicRange.collectAsState()
       val sdrBoostEnabled by viewModel.sdrHdrBoostEnabled.collectAsState()
-      val hardwarePlusMode by viewModel.hardwarePlusMode.collectAsState()
       val active =
-        if (hardwarePlusMode) {
-          dynamicRange == VideoDynamicRange.HDR
-        } else {
-          viewModel.hdrPipelineAvailable &&
-            (dynamicRange == VideoDynamicRange.HDR ||
-              (dynamicRange == VideoDynamicRange.SDR && sdrBoostEnabled))
-        }
+        viewModel.hdrPipelineAvailable &&
+          (dynamicRange == VideoDynamicRange.HDR ||
+            (dynamicRange == VideoDynamicRange.SDR && sdrBoostEnabled))
       ControlsButton(
         icon = if (active) Icons.Default.HdrOn else Icons.Default.HdrOff,
         onClick = viewModel::toggleHdrPlayback,
@@ -364,12 +359,10 @@ fun RenderPlayerButton(
     }
 
     PlayerButton.AI_UPSCALE -> {
-      val hardwarePlusMode by viewModel.hardwarePlusMode.collectAsState()
       ControlsButton(
         icon = Icons.Default.Hd,
         onClick = { onOpenSheet(Sheets.AiUpscale) },
-        color = if (hardwarePlusMode) MaterialTheme.colorScheme.outline
-        else if (hideBackground) controlColor else MaterialTheme.colorScheme.onSurface,
+        color = if (hideBackground) controlColor else MaterialTheme.colorScheme.onSurface,
         modifier = Modifier.size(buttonSize),
       )
     }

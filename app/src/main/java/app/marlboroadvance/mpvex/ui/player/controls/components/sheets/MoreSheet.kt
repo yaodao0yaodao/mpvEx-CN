@@ -1,9 +1,7 @@
 package app.marlboroadvance.mpvex.ui.player.controls.components.sheets
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
@@ -12,16 +10,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import app.marlboroadvance.mpvex.R
 import app.marlboroadvance.mpvex.preferences.AdvancedPreferences
-import app.marlboroadvance.mpvex.preferences.DecoderPreferences
 import app.marlboroadvance.mpvex.preferences.preference.collectAsState
 import app.marlboroadvance.mpvex.presentation.components.PlayerSheet
 import app.marlboroadvance.mpvex.ui.player.MPVProfile
@@ -33,16 +27,11 @@ import org.koin.compose.koinInject
 fun MoreSheet(
   currentProfile: MPVProfile,
   onProfileChanged: (MPVProfile) -> Unit,
-  onRendererSettingChanged: () -> Unit,
   onDismissRequest: () -> Unit,
-  hardwarePlusMode: Boolean = false,
   modifier: Modifier = Modifier,
 ) {
   val advancedPreferences = koinInject<AdvancedPreferences>()
-  val decoderPreferences = koinInject<DecoderPreferences>()
   val statisticsPage by advancedPreferences.enabledStatisticsPage.collectAsState()
-  val gpuNext by decoderPreferences.gpuNext.collectAsState()
-  val useVulkan by decoderPreferences.useVulkan.collectAsState()
 
   PlayerSheet(onDismissRequest, modifier) {
     Column(
@@ -106,53 +95,6 @@ fun MoreSheet(
         }
       }
 
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.medium),
-        verticalAlignment = Alignment.CenterVertically,
-      ) {
-        Row(
-          modifier =
-            Modifier
-              .weight(1f)
-              .clickable {
-                decoderPreferences.gpuNext.set(!gpuNext)
-                onRendererSettingChanged()
-              },
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-          Text(stringResource(R.string.pref_decoder_gpu_next_title))
-          Switch(
-            checked = gpuNext,
-            onCheckedChange = {
-              decoderPreferences.gpuNext.set(it)
-              onRendererSettingChanged()
-            },
-          )
-        }
-        Row(
-          modifier =
-            Modifier
-              .weight(1f)
-              .clickable(enabled = !hardwarePlusMode) {
-                decoderPreferences.useVulkan.set(!useVulkan)
-                onRendererSettingChanged()
-              },
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-          Text(stringResource(R.string.pref_decoder_vulkan_title))
-          Switch(
-            checked = useVulkan,
-            enabled = !hardwarePlusMode,
-            onCheckedChange = {
-              decoderPreferences.useVulkan.set(it)
-              onRendererSettingChanged()
-            },
-          )
-        }
-      }
     }
   }
 }

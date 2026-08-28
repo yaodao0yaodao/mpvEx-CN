@@ -738,7 +738,7 @@ class PlayerActivity :
         "auto_crop" -> {
           val enabled = value.toDebugBoolean()
           viewModel.setAutoCropEnabled(enabled)
-          "temporary auto_crop=$enabled"
+          "persistent auto_crop=$enabled"
         }
         "anime_mode" -> {
           val mode = Anime4KManager.Mode.entries.firstOrNull { it.name.equals(value, true) } ?: error("unknown AI mode")
@@ -2008,6 +2008,10 @@ class PlayerActivity :
       Log.i(TAG, "Applied low-latency profile for live stream")
     }
     val hdrType = player.currentVideoHdrType()
+    if (player.updateLinearHdrRequirement(hdrType)) {
+      restartForRendererSettings()
+      return
+    }
     player.applyHardwarePlusHdrForSource(hdrType)
     viewModel.onVideoLoaded(hdrType)
     if (intent.hasExtra(EXTRA_RESUME_PLAYING)) {
@@ -2151,6 +2155,10 @@ class PlayerActivity :
 
   private fun refreshVideoHdrState() {
     val hdrType = player.currentVideoHdrType()
+    if (player.updateLinearHdrRequirement(hdrType)) {
+      restartForRendererSettings()
+      return
+    }
     player.applyHardwarePlusHdrForSource(hdrType)
     viewModel.updateVideoHdrType(hdrType)
   }

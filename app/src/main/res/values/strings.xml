@@ -138,6 +138,8 @@
   <string name="pref_player">Player</string>
   <string name="pref_player_summary">Orientation, gestures and controls</string>
   <string name="pref_player_orientation">Orientation</string>
+  <string name="pref_player_auto_crop_black_bars">Automatically crop black bars</string>
+  <string name="pref_player_auto_crop_black_bars_summary">Conservatively detects stable black bars while preserving subtitle areas</string>
   <string name="pref_player_orientation_free">Free</string>
   <string name="pref_player_orientation_video">Video</string>
   <string name="pref_player_orientation_portrait">Portrait</string>

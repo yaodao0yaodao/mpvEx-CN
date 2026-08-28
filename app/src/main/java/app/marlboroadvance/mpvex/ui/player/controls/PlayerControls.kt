@@ -137,8 +137,9 @@ private data class StatsPageSixSnapshot(
   val fps: String = "-- / --",
   val dropped: Int = 0,
   val aiUpscale: String = "--",
-  val hdr: String = "--",
+  val screen: String = "--",
   val profile: String = "--",
+  val automaticControl: String = "未介入",
 )
 
 private fun actualShaderStatus(): String {
@@ -165,22 +166,48 @@ private fun actualShaderStatus(): String {
   return "$family（实际加载 ${aiShaders.size} 个着色器）"
 }
 
-private fun actualHdrStatus(): String {
-  val inverseToneMapping = MPVLib.getPropertyString("inverse-tone-mapping") ?: "--"
-  val targetTrc = MPVLib.getPropertyString("target-trc") ?: "--"
-  val targetPrimaries = MPVLib.getPropertyString("target-prim") ?: "--"
-  val colorspaceHint = MPVLib.getPropertyString("target-colorspace-hint") ?: "--"
-  return "增强=$inverseToneMapping，TRC=$targetTrc，色域=$targetPrimaries，hint=$colorspaceHint"
+private fun actualScreenStatus(activity: PlayerActivity): String {
+  val outputRequested = MPVLib.getPropertyString("target-colorspace-hint") == "yes"
+  val display = activity.window.decorView.display
+  val active = if (android.os.Build.VERSION.SDK_INT >= 36) display?.isHdr else null
+  val ratio =
+    if (android.os.Build.VERSION.SDK_INT >= 34 && display?.isHdrSdrRatioAvailable == true) {
+      "，HDR/SDR=${"%.2f".format(display.hdrSdrRatio)}×"
+    } else {
+      ""
+    }
+  return "HDR输出=${if (outputRequested) "开启" else "关闭"}，屏幕HDR=${active?.let { if (it) "已激活" else "未激活" } ?: "不可读取"}$ratio"
 }
 
 @Composable
 private fun CustomStatsPageSixOverlay(
+  viewModel: PlayerViewModel,
   modifier: Modifier = Modifier,
 ) {
+  val activity = LocalActivity.current as PlayerActivity
+  val automaticControl by viewModel.automaticControlStatus.collectAsState()
   val snapshot by produceState(initialValue = StatsPageSixSnapshot()) {
+    var previousFrame: Int? = null
+    var previousDropped: Int? = null
+    var previousSampleMs: Long? = null
     while (true) {
       val sourceFps = MPVLib.getPropertyDouble("container-fps") ?: 0.0
-      val renderFps = MPVLib.getPropertyDouble("estimated-vf-fps") ?: 0.0
+      val now = android.os.SystemClock.elapsedRealtime()
+      val frame = MPVLib.getPropertyInt("estimated-frame-number")
+      val droppedFrames = MPVLib.getPropertyInt("frame-drop-count") ?: 0
+      val renderFps =
+        if (frame != null && previousFrame != null && previousSampleMs != null) {
+          val elapsed = (now - previousSampleMs!!).coerceAtLeast(1L) / 1000.0
+          val rendered =
+            (frame - previousFrame!! - (droppedFrames - (previousDropped ?: droppedFrames)).coerceAtLeast(0))
+              .coerceAtLeast(0)
+          rendered / elapsed
+        } else {
+          0.0
+        }
+      previousFrame = frame
+      previousDropped = droppedFrames
+      previousSampleMs = now
       value =
         StatsPageSixSnapshot(
           decoder = MPVLib.getPropertyString("hwdec-current") ?: "--",
@@ -199,13 +226,14 @@ private fun CustomStatsPageSixOverlay(
             },
           // frame-drop-count is a real mpv property. The old drop-frame-count spelling
           // does not exist and was the source of recurring log errors.
-          dropped = MPVLib.getPropertyInt("frame-drop-count") ?: 0,
+          dropped = droppedFrames,
           aiUpscale = actualShaderStatus(),
-          hdr = actualHdrStatus(),
+          screen = actualScreenStatus(activity),
           profile =
             MPVLib.getPropertyString(RUNTIME_PROFILE_PROPERTY)
               ?.removeSurrounding("\"")
               ?: "--",
+          automaticControl = automaticControl,
         )
       delay(if (MPVLib.getPropertyBoolean("pause") == true) 2000L else 1000L)
     }
@@ -222,7 +250,8 @@ private fun CustomStatsPageSixOverlay(
       Text("渲染：${snapshot.renderer}", color = Color.White, fontSize = 10.sp)
       Text("视频：${snapshot.video}", color = Color.White, fontSize = 10.sp)
       Text("超分：${snapshot.aiUpscale}", color = Color.White, fontSize = 10.sp)
-      Text("HDR：${snapshot.hdr}", color = Color.White, fontSize = 10.sp)
+      Text("屏幕：${snapshot.screen}", color = Color.White, fontSize = 10.sp)
+      Text("自动控制：${snapshot.automaticControl}", color = Color.White, fontSize = 10.sp)
       Text("MPV 配置档：${snapshot.profile}", color = Color.White, fontSize = 10.sp)
       Text("渲染 / 片源 FPS：${snapshot.fps}", color = Color.White, fontSize = 10.sp)
       Text("丢帧：${snapshot.dropped}", color = Color.White, fontSize = 10.sp)
@@ -411,6 +440,7 @@ fun PlayerControls(
 
         if (statisticsPage == 6) {
           CustomStatsPageSixOverlay(
+            viewModel = viewModel,
             modifier = Modifier.constrainAs(customStats) {
               start.linkTo(parent.start, spacing.medium)
               top.linkTo(parent.top, spacing.medium)
@@ -732,7 +762,7 @@ fun PlayerControls(
         }
 
         AnimatedVisibility(
-          visible = controlsShown && !areControlsLocked,
+          visible = (controlsShown || seekBarShown) && !areControlsLocked,
           enter = fadeIn(playerControlsEnterAnimationSpec()),
           exit = fadeOut(playerControlsExitAnimationSpec()),
           modifier =
@@ -1015,7 +1045,7 @@ fun PlayerControls(
           val seekbarStyle by appearancePreferences.seekbarStyle.collectAsState()
 
           SeekbarWithTimers(
-            position = precisePosition,
+            position = if (seekThumbnailPreview.visible) seekThumbnailPreview.positionSeconds else precisePosition,
             duration = if (preciseDuration > 0) preciseDuration else duration?.toFloat() ?: 0f,
             onValueChange = {
               isSeeking = true
