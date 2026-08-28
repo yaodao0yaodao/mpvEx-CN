@@ -202,7 +202,10 @@ private fun CustomStatsPageSixOverlay(
           dropped = MPVLib.getPropertyInt("frame-drop-count") ?: 0,
           aiUpscale = actualShaderStatus(),
           hdr = actualHdrStatus(),
-          profile = MPVLib.getPropertyString(RUNTIME_PROFILE_PROPERTY) ?: "--",
+          profile =
+            MPVLib.getPropertyString(RUNTIME_PROFILE_PROPERTY)
+              ?.removeSurrounding("\"")
+              ?: "--",
         )
       delay(if (MPVLib.getPropertyBoolean("pause") == true) 2000L else 1000L)
     }
