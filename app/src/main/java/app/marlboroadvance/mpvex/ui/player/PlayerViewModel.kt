@@ -2397,6 +2397,7 @@ class PlayerViewModel(
 
   fun applyRuntimeProfile(profile: MPVProfile, automatic: Boolean = false) {
     MPVLib.command("apply-profile", profile.value)
+    MPVLib.setPropertyString(RUNTIME_PROFILE_PROPERTY, profile.value)
     _runtimeProfile.value = profile
     if (!automatic) automaticRuntimeBaseline?.profile = profile
   }
@@ -2419,6 +2420,7 @@ class PlayerViewModel(
     automaticRuntimeBaseline?.let { baseline ->
       MPVLib.setPropertyDouble("speed", baseline.speed)
       MPVLib.command("apply-profile", baseline.profile.value)
+      MPVLib.setPropertyString(RUNTIME_PROFILE_PROPERTY, baseline.profile.value)
       _runtimeProfile.value = baseline.profile
     }
     automaticRuntimeBaseline = null

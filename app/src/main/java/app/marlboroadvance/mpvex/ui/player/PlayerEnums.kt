@@ -86,6 +86,8 @@ enum class MPVProfile(
   }
 }
 
+const val RUNTIME_PROFILE_PROPERTY = "user-data/mpvex/runtime-profile"
+
 enum class Sheets {
   None,
   PlaybackSpeed,

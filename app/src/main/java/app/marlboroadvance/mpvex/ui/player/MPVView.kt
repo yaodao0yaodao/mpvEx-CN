@@ -44,6 +44,7 @@ class MPVView(
   private var appliedShaderChain: String? = null
   private var hardwarePlusHdrShaderPaths: List<String> = emptyList()
   private var runtimeAnime4KSuppressed = false
+  private var initialRuntimeProfile = MPVProfile.Fast.value
 
   var isExiting = false
   var decoderOverride: Decoder? = null
@@ -121,6 +122,7 @@ class MPVView(
     val runtimeProfile =
       if (activeDecoder == Decoder.SW || hardwarePlusMode) MPVProfile.Fast.value
       else MPVProfile.fromValue(decoderPreferences.profile.get()).value
+    initialRuntimeProfile = runtimeProfile
     MPVLib.setOptionString("profile", runtimeProfile)
     val linearHdrSupported = VulkanCapabilities.isDeviceSupported(context)
     val anime4kActive =
@@ -236,6 +238,10 @@ class MPVView(
   }
 
   override fun postInitOptions() {
+    // mpv applies profiles but does not expose the name of the last applied profile.
+    // Keep a runtime marker beside mpv's live properties so diagnostics report the
+    // profile actually applied to this player instance, not the saved preference.
+    MPVLib.setPropertyString(RUNTIME_PROFILE_PROPERTY, initialRuntimeProfile)
     when (decoderPreferences.debanding.get()) {
       Debanding.None -> {}
       Debanding.CPU -> MPVLib.command("vf", "add", "@deband:gradfun=radius=12")

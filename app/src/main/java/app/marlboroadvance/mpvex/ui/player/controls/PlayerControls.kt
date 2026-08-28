@@ -103,6 +103,7 @@ import app.marlboroadvance.mpvex.ui.player.Panels
 import app.marlboroadvance.mpvex.ui.player.PlayerActivity
 import app.marlboroadvance.mpvex.ui.player.PlayerUpdates
 import app.marlboroadvance.mpvex.ui.player.PlayerViewModel
+import app.marlboroadvance.mpvex.ui.player.RUNTIME_PROFILE_PROPERTY
 import app.marlboroadvance.mpvex.ui.player.Sheets
 import app.marlboroadvance.mpvex.ui.player.VideoAspect
 import app.marlboroadvance.mpvex.ui.player.controls.components.BrightnessSlider
@@ -137,12 +138,43 @@ private data class StatsPageSixSnapshot(
   val dropped: Int = 0,
   val aiUpscale: String = "--",
   val hdr: String = "--",
+  val profile: String = "--",
 )
+
+private fun actualShaderStatus(): String {
+  val shaderPaths =
+    MPVLib.getPropertyString("glsl-shaders")
+      .orEmpty()
+      .split(':')
+      .filter(String::isNotBlank)
+  val aiShaders =
+    shaderPaths.mapNotNull { path ->
+      val fileName = path.substringAfterLast('/').substringAfterLast('\\')
+      fileName.takeIf {
+        it.contains("ArtCNN", ignoreCase = true) ||
+          it.contains("Anime4K_Upscale", ignoreCase = true) ||
+          it.contains("Anime4K_Restore", ignoreCase = true)
+      }
+    }
+  if (aiShaders.isEmpty()) return "关闭（glsl-shaders 未加载 AI 着色器）"
+  val family =
+    when {
+      aiShaders.any { it.contains("ArtCNN", ignoreCase = true) } -> "ArtCNN"
+      else -> "Anime4K"
+    }
+  return "$family（实际加载 ${aiShaders.size} 个着色器）"
+}
+
+private fun actualHdrStatus(): String {
+  val inverseToneMapping = MPVLib.getPropertyString("inverse-tone-mapping") ?: "--"
+  val targetTrc = MPVLib.getPropertyString("target-trc") ?: "--"
+  val targetPrimaries = MPVLib.getPropertyString("target-prim") ?: "--"
+  val colorspaceHint = MPVLib.getPropertyString("target-colorspace-hint") ?: "--"
+  return "增强=$inverseToneMapping，TRC=$targetTrc，色域=$targetPrimaries，hint=$colorspaceHint"
+}
 
 @Composable
 private fun CustomStatsPageSixOverlay(
-  viewModel: PlayerViewModel,
-  profile: String,
   modifier: Modifier = Modifier,
 ) {
   val snapshot by produceState(initialValue = StatsPageSixSnapshot()) {
@@ -151,15 +183,26 @@ private fun CustomStatsPageSixOverlay(
       val renderFps = MPVLib.getPropertyDouble("estimated-vf-fps") ?: 0.0
       value =
         StatsPageSixSnapshot(
-          decoder = MPVLib.getPropertyString("hwdec-current") ?: "no（软件解码）",
-          renderer = listOfNotNull(MPVLib.getPropertyString("current-vo"), MPVLib.getPropertyString("gpu-api")).joinToString(" / ").ifBlank { "--" },
-          video = MPVLib.getPropertyString("video-codec-name") ?: MPVLib.getPropertyString("video-codec") ?: "--",
-          fps = if (sourceFps > 0.0 || renderFps > 0.0) "%.2f / %.2f".format(renderFps, sourceFps) else "-- / --",
+          decoder = MPVLib.getPropertyString("hwdec-current") ?: "--",
+          renderer =
+            listOfNotNull(
+              MPVLib.getPropertyString("current-vo"),
+              MPVLib.getPropertyString("gpu-api"),
+              MPVLib.getPropertyString("gpu-context"),
+            ).joinToString(" / ").ifBlank { "--" },
+          video = MPVLib.getPropertyString("video-codec") ?: "--",
+          fps =
+            if (sourceFps > 0.0 || renderFps > 0.0) {
+              "%.2f / %.2f".format(renderFps, sourceFps)
+            } else {
+              "-- / --"
+            },
           // frame-drop-count is a real mpv property. The old drop-frame-count spelling
           // does not exist and was the source of recurring log errors.
           dropped = MPVLib.getPropertyInt("frame-drop-count") ?: 0,
-          aiUpscale = viewModel.currentAiUpscaleStatus(),
-          hdr = viewModel.currentHdrPlaybackStatus(),
+          aiUpscale = actualShaderStatus(),
+          hdr = actualHdrStatus(),
+          profile = MPVLib.getPropertyString(RUNTIME_PROFILE_PROPERTY) ?: "--",
         )
       delay(if (MPVLib.getPropertyBoolean("pause") == true) 2000L else 1000L)
     }
@@ -177,7 +220,7 @@ private fun CustomStatsPageSixOverlay(
       Text("视频：${snapshot.video}", color = Color.White, fontSize = 10.sp)
       Text("超分：${snapshot.aiUpscale}", color = Color.White, fontSize = 10.sp)
       Text("HDR：${snapshot.hdr}", color = Color.White, fontSize = 10.sp)
-      Text("MPV 配置档：$profile", color = Color.White, fontSize = 10.sp)
+      Text("MPV 配置档：${snapshot.profile}", color = Color.White, fontSize = 10.sp)
       Text("渲染 / 片源 FPS：${snapshot.fps}", color = Color.White, fontSize = 10.sp)
       Text("丢帧：${snapshot.dropped}", color = Color.White, fontSize = 10.sp)
     }
@@ -219,8 +262,6 @@ fun PlayerControls(
   val audioPreferences = koinInject<AudioPreferences>()
   val advancedPreferences = koinInject<AdvancedPreferences>()
   val statisticsPage by advancedPreferences.enabledStatisticsPage.collectAsState()
-  val runtimeProfile by viewModel.runtimeProfile.collectAsState()
-  val runtimeProfileName = stringResource(runtimeProfile.titleRes)
   val showSystemStatusBar by playerPreferences.showSystemStatusBar.collectAsState()
   val showSystemNavigationBar by playerPreferences.showSystemNavigationBar.collectAsState()
   val interactionSource = remember { MutableInteractionSource() }
@@ -367,8 +408,6 @@ fun PlayerControls(
 
         if (statisticsPage == 6) {
           CustomStatsPageSixOverlay(
-            viewModel = viewModel,
-            profile = runtimeProfileName,
             modifier = Modifier.constrainAs(customStats) {
               start.linkTo(parent.start, spacing.medium)
               top.linkTo(parent.top, spacing.medium)

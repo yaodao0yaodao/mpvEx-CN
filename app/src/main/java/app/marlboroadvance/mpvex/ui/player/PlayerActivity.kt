@@ -2004,7 +2004,7 @@ class PlayerActivity :
     val loadedUri = extractUriFromIntent(intent)
     val durationSeconds = MPVLib.getPropertyDouble("duration") ?: 0.0
     if (loadedUri != null && HttpUtils.isNetworkStream(loadedUri) && durationSeconds <= 0.0) {
-      MPVLib.command("apply-profile", MPVProfile.LowLatency.value)
+      viewModel.applyRuntimeProfile(MPVProfile.LowLatency, automatic = true)
       Log.i(TAG, "Applied low-latency profile for live stream")
     }
     val hdrType = player.currentVideoHdrType()
