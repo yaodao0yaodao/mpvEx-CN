@@ -216,10 +216,12 @@ fun SeekbarWithTimers(
               } while (event.changes.any { it.pressed })
 
               val target = latestInteractionPosition.coerceIn(0f, safeDuration)
-              animatedPosition.snapTo(target)
-              userPosition = target
-              onValueChangeFinished(target)
-              isUserInteracting = false
+              scope.launch {
+                animatedPosition.snapTo(target)
+                userPosition = target
+                onValueChangeFinished(target)
+                isUserInteracting = false
+              }
             }
           }
           .padding(vertical = 8.dp), // Keep the entire 48 dp container touchable.
