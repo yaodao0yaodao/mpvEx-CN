@@ -129,7 +129,7 @@ class PlayerActivity :
         val previous = previousBatteryPercent
         previousBatteryPercent = percent
         if (previous != null && previous >= 30 && percent < 30) {
-          LowBatteryAdvisor.show(this@PlayerActivity, decoderPreferences.hardwarePlusEnabled.get())
+          LowBatteryAdvisor.show(this@PlayerActivity)
         }
       }
     }
@@ -265,6 +265,8 @@ class PlayerActivity :
   private var savePlaybackStateJob: kotlinx.coroutines.Job? = null // Track ongoing save job
   private var wasPlayingBeforePause = false // Track if video was playing before pause
   private var isDecoderRestarting = false
+  private var runtimeDecoderTarget: Decoder? = null
+  private var runtimeDecoderResolutionJob: kotlinx.coroutines.Job? = null
 
   // ==================== Background Playback ====================
 
@@ -705,7 +707,7 @@ class PlayerActivity :
     intent.removeExtra(EXTRA_AUTOMATIC_DECODER_BASELINE)
     intent.removeExtra(EXTRA_AUTOMATIC_DECODER_MEDIA)
     beginDecoderFallback(decoder)
-    restartPlayback(decoder)
+    switchDecoderInPlace(decoder)
   }
 
   /** Debug-build ADB control surface. Commands follow the same persistence rules as the UI. */
@@ -715,9 +717,6 @@ class PlayerActivity :
         "decoder" -> {
           val decoder = Decoder.priorityModes.firstOrNull { it.name.equals(value, true) || it.value.equals(value, true) }
             ?: error("decoder must be HWPlus, HW or SW")
-          if (decoder == Decoder.HWPlus && !decoderPreferences.hardwarePlusEnabled.get()) {
-            error("HWPlus is not enabled in decoder priority")
-          }
           viewModel.selectDecoder(decoder)
           "temporary decoder=$decoder"
         }
@@ -759,11 +758,6 @@ class PlayerActivity :
           restartForRendererSettings()
           "persistent vulkan=$enabled"
         }
-        "hardware_plus_enabled" -> {
-          val enabled = value.toDebugBoolean()
-          decoderPreferences.hardwarePlusEnabled.set(enabled)
-          "persistent hardware_plus_enabled=$enabled"
-        }
         "console" -> {
           val enabled = value.toDebugBoolean()
           MPVLib.command("script-message-to", "console", if (enabled) "enable" else "disable")
@@ -791,7 +785,7 @@ class PlayerActivity :
     intent.putExtra(EXTRA_AUTOMATIC_DECODER_BASELINE, baseline.value)
     intent.putExtra(EXTRA_AUTOMATIC_DECODER_MEDIA, mediaIdentifier)
     beginDecoderFallback(decoder)
-    restartPlayback(decoder)
+    switchDecoderInPlace(decoder)
   }
 
   fun restoreAutomaticDecoderIfNeeded(stateAlreadySaved: Boolean = false): Boolean {
@@ -805,13 +799,67 @@ class PlayerActivity :
       } ?: return false
     intent.removeExtra(EXTRA_AUTOMATIC_DECODER_BASELINE)
     intent.removeExtra(EXTRA_AUTOMATIC_DECODER_MEDIA)
-    restartPlayback(baseline, stateAlreadySaved)
+    beginDecoderFallback(baseline)
+    switchDecoderInPlace(baseline)
     return true
+  }
+
+  private fun switchDecoderInPlace(decoder: Decoder) {
+    if (!mpvInitialized || decoder == player.activeDecoder) return
+    runtimeDecoderResolutionJob?.cancel()
+    runtimeDecoderTarget = decoder
+    if (decoder == Decoder.SW || decoder == Decoder.HWPlus) {
+      viewModel.applyRuntimeProfile(MPVProfile.Fast, automatic = true)
+    } else {
+      viewModel.applyRuntimeProfile(MPVProfile.fromValue(decoderPreferences.profile.get()), automatic = true)
+    }
+    player.switchDecoderRuntime(decoder)
+    // Most devices report hwdec-current and PLAYBACK_RESTART immediately. The
+    // timeout only handles decoders that fail without emitting either event.
+    runtimeDecoderResolutionJob =
+      lifecycleScope.launch {
+        kotlinx.coroutines.delay(2500)
+        resolveRuntimeDecoderSwitch()
+      }
+  }
+
+  private fun resolveRuntimeDecoderSwitch() {
+    val requested = runtimeDecoderTarget ?: return
+    val actual = decoderFromRuntimeValue(MPVLib.getPropertyString("hwdec-current"))
+    if (actual == requested) {
+      runtimeDecoderTarget = null
+      runtimeDecoderResolutionJob?.cancel()
+      runtimeDecoderResolutionJob = null
+      recordDecoderAttempt(actual)
+      viewModel.onRuntimeDecoderResolved(actual)
+      return
+    }
+    runtimeDecoderTarget = null
+    runtimeDecoderResolutionJob = null
+    if (requested == Decoder.HWPlus) {
+      intent.putExtra(EXTRA_HWPLUS_REJECTED_MEDIA, mediaIdentifier)
+      viewModel.markHardwarePlusRejected()
+    }
+    val next = nextDecoderAfterFailure(requested)
+    if (next == null) showDecoderFailure() else if (next == actual) {
+      recordDecoderAttempt(next)
+      player.adoptRuntimeDecoder(next)
+      viewModel.onRuntimeDecoderResolved(next)
+    } else {
+      recordDecoderAttempt(next)
+      switchDecoderInPlace(next)
+    }
   }
 
   fun restartForRendererSettings() {
     if (!mpvInitialized) return
     restartPlayback(viewModel.selectedDecoder.value)
+  }
+
+  fun refreshRendererFeatures() {
+    if (!mpvInitialized) return
+    if (player.refreshRendererFeatures()) restartForRendererSettings()
+    else viewModel.updateVideoHdrType(player.currentVideoHdrType(), forceApply = true)
   }
 
   private fun restartPlayback(decoder: Decoder, stateAlreadySaved: Boolean = false) {
@@ -869,6 +917,7 @@ class PlayerActivity :
   }
 
   private fun handleDecoderResolvedAfterLoad(): Boolean {
+    if (runtimeDecoderTarget != null) return false
     val requested = player.activeDecoder
     val actual = decoderFromRuntimeValue(MPVLib.getPropertyString("hwdec-current"))
     if (actual == null || actual == requested) {
@@ -894,7 +943,7 @@ class PlayerActivity :
       return false
     }
     recordDecoderAttempt(next)
-    restartPlayback(next)
+    switchDecoderInPlace(next)
     return true
   }
 
@@ -909,7 +958,7 @@ class PlayerActivity :
       showDecoderFailure()
     } else {
       recordDecoderAttempt(next)
-      restartPlayback(next)
+      switchDecoderInPlace(next)
     }
   }
 
@@ -1939,6 +1988,12 @@ class PlayerActivity :
             value.equals("no", ignoreCase = true) || value.isBlank() -> Decoder.SW
             else -> return
           }
+        runtimeDecoderTarget?.let { requested ->
+          // video-reload can briefly report the decoder being torn down. Only
+          // accept the requested value; the timeout handles a real rejection.
+          if (decoder == requested) resolveRuntimeDecoderSwitch()
+          return
+        }
         if (decoder != player.activeDecoder) {
           if (player.activeDecoder == Decoder.HWPlus) {
             intent.putExtra(EXTRA_HWPLUS_REJECTED_MEDIA, mediaIdentifier)
@@ -1952,7 +2007,7 @@ class PlayerActivity :
             viewModel.onRuntimeDecoderResolved(decoder)
           } else {
             recordDecoderAttempt(next)
-            restartPlayback(next)
+            switchDecoderInPlace(next)
           }
           return
         }
@@ -1988,6 +2043,14 @@ class PlayerActivity :
 
       MPVLib.MpvEvent.MPV_EVENT_PLAYBACK_RESTART -> {
         player.isExiting = false
+        if (runtimeDecoderTarget != null) {
+          runtimeDecoderResolutionJob?.cancel()
+          runtimeDecoderResolutionJob =
+            lifecycleScope.launch {
+              kotlinx.coroutines.delay(150)
+              resolveRuntimeDecoderSwitch()
+            }
+        }
         if (!isReady) {
           isReady = true
         }
@@ -2014,7 +2077,6 @@ class PlayerActivity :
       restartForRendererSettings()
       return
     }
-    player.applyHardwarePlusHdrForSource(hdrType)
     viewModel.onVideoLoaded(hdrType)
     if (intent.hasExtra(EXTRA_RESUME_PLAYING)) {
       MPVLib.setPropertyBoolean("pause", !intent.getBooleanExtra(EXTRA_RESUME_PLAYING, true))
@@ -2161,7 +2223,6 @@ class PlayerActivity :
       restartForRendererSettings()
       return
     }
-    player.applyHardwarePlusHdrForSource(hdrType)
     viewModel.updateVideoHdrType(hdrType)
   }
 

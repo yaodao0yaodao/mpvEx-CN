@@ -169,13 +169,17 @@ private fun actualShaderStatus(): String {
 private fun actualScreenStatus(activity: PlayerActivity): String {
   val outputRequested = MPVLib.getPropertyString("target-colorspace-hint") == "yes"
   val display = activity.window.decorView.display
-  val active = if (android.os.Build.VERSION.SDK_INT >= 36) display?.isHdr else null
-  val ratio =
+  val hdrSdrRatio =
     if (android.os.Build.VERSION.SDK_INT >= 34 && display?.isHdrSdrRatioAvailable == true) {
-      "，HDR/SDR=${"%.2f".format(display.hdrSdrRatio)}×"
-    } else {
-      ""
-    }
+      display.hdrSdrRatio
+    } else null
+  // Some vendor builds report Display.isHdr=true for an HDR-capable surface
+  // even while it is presenting SDR. A live HDR/SDR ratio above 1 is the more
+  // useful signal of an actually active screen HDR mode.
+  val active =
+    hdrSdrRatio?.let { it > 1.01f }
+      ?: if (android.os.Build.VERSION.SDK_INT >= 36) display?.isHdr else null
+  val ratio = hdrSdrRatio?.let { "，HDR/SDR=${"%.2f".format(it)}×" }.orEmpty()
   return "HDR输出=${if (outputRequested) "开启" else "关闭"}，屏幕HDR=${active?.let { if (it) "已激活" else "未激活" } ?: "不可读取"}$ratio"
 }
 

@@ -14,14 +14,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -65,7 +62,6 @@ object DecoderPreferencesScreen : Screen {
     val isVulkanSupported = remember { VulkanCapabilities.isDeviceSupported(context) }
     var showGpuNextWarning by remember { mutableStateOf(false) }
     var showDecoderPriorityDialog by remember { mutableStateOf(false) }
-    var showHardwarePlusWarning by remember { mutableStateOf(false) }
     Scaffold(
       topBar = {
         TopAppBar(
@@ -280,7 +276,6 @@ object DecoderPreferencesScreen : Screen {
 
     if (showDecoderPriorityDialog) {
       val priority by preferences.decoderPriority.collectAsState()
-      val hardwarePlusEnabled by preferences.hardwarePlusEnabled.collectAsState()
       AlertDialog(
         onDismissRequest = { showDecoderPriorityDialog = false },
         title = { Text(stringResource(R.string.pref_decoder_priority_title)) },
@@ -302,18 +297,6 @@ object DecoderPreferencesScreen : Screen {
                   style = MaterialTheme.typography.bodyLarge,
                   modifier = Modifier.weight(1f).padding(vertical = 8.dp),
                 )
-                if (decoder == Decoder.HWPlus) {
-                  Checkbox(
-                    checked = hardwarePlusEnabled,
-                    onCheckedChange = { enabled ->
-                      if (enabled) {
-                        showHardwarePlusWarning = true
-                      } else {
-                        preferences.hardwarePlusEnabled.set(false)
-                      }
-                    },
-                  )
-                }
                 IconButton(
                   onClick = {
                     val updated = priority.toMutableList()
@@ -348,48 +331,5 @@ object DecoderPreferencesScreen : Screen {
       )
     }
 
-    if (showHardwarePlusWarning) {
-      AlertDialog(
-        onDismissRequest = { showHardwarePlusWarning = false },
-        title = { Text(stringResource(R.string.pref_decoder_hwplus_enable_title)) },
-        text = {
-          Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(stringResource(R.string.pref_decoder_hwplus_warning))
-            Surface(
-              color = MaterialTheme.colorScheme.errorContainer,
-              shape = MaterialTheme.shapes.small,
-            ) {
-              Column(modifier = Modifier.padding(12.dp)) {
-                Text(
-                  stringResource(R.string.pref_decoder_hwplus_incompatible_title),
-                  style = MaterialTheme.typography.titleSmall,
-                  color = MaterialTheme.colorScheme.onErrorContainer,
-                )
-                Text(
-                  stringResource(R.string.pref_decoder_hwplus_incompatible_body),
-                  style = MaterialTheme.typography.bodySmall,
-                  color = MaterialTheme.colorScheme.onErrorContainer,
-                )
-              }
-            }
-          }
-        },
-        confirmButton = {
-          Button(
-            onClick = {
-              preferences.hardwarePlusEnabled.set(true)
-              showHardwarePlusWarning = false
-            },
-          ) {
-            Text(stringResource(R.string.pref_decoder_hwplus_enable_anyway))
-          }
-        },
-        dismissButton = {
-          TextButton(onClick = { showHardwarePlusWarning = false }) {
-            Text(stringResource(R.string.generic_cancel))
-          }
-        },
-      )
-    }
   }
 }

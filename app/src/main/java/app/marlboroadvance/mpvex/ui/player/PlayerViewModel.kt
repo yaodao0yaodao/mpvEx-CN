@@ -1413,6 +1413,7 @@ class PlayerViewModel(
 
   private fun startAutoCropDetection() {
     stopAutoCropDetection(removeCrop = true)
+    playerUpdate.value = PlayerUpdates.ShowText("正在识别可安全裁剪的黑边…")
     MPVLib.command("vf", "add", "@mpvex_cropdetect:lavfi=[cropdetect=limit=0.094:round=2:reset=0]")
     autoCropJob =
       viewModelScope.launch(Dispatchers.IO) {
@@ -1490,16 +1491,24 @@ class PlayerViewModel(
             stableCandidate = candidate
             stableSamples = 1
           }
-          if (stableSamples >= 6) {
+          // Soft subtitles are rendered after the crop filter, so an otherwise
+          // clear single-axis symmetric result can be confirmed in about 2 s.
+          // With possible burned-in subtitles, keep observing for at least 3 s.
+          val requiredSamples = if (hasSelectedSoftSubtitle) 4 else 6
+          if (stableSamples >= requiredSamples) {
             appliedAutoCrop = candidate
             MPVLib.command("vf", "add", "@mpvex_autocrop:crop=$candidate")
             MPVLib.command("vf", "remove", "@mpvex_cropdetect")
             Log.i(TAG, "Applied stable subtitle-safe auto crop: $candidate")
             applyCurrentAspectAfterAutoCrop()
+            playerUpdate.value = PlayerUpdates.ShowText("已自动裁剪黑边")
             return@launch
           }
         }
         MPVLib.command("vf", "remove", "@mpvex_cropdetect")
+        if (_autoCropEnabled.value && appliedAutoCrop == null) {
+          playerUpdate.value = PlayerUpdates.ShowText("未检测到可安全裁剪的黑边")
+        }
       }
   }
 
@@ -1515,7 +1524,7 @@ class PlayerViewModel(
     // AI modes may temporarily require gpu-next + Vulkan. Recreate the renderer
     // while preserving playback state so disabling AI can restore the user's
     // saved backend choices as well.
-    (host as? PlayerActivity)?.restartForRendererSettings()
+    (host as? PlayerActivity)?.refreshRendererFeatures()
   }
 
   fun currentAiUpscaleStatus(): String =
@@ -2575,8 +2584,7 @@ class PlayerViewModel(
   }
 
   fun canAutoSelectHardwarePlus(): Boolean =
-    decoderPreferences.hardwarePlusEnabled.get() &&
-      !hardwarePlusRejectedForCurrentFile &&
+    !hardwarePlusRejectedForCurrentFile &&
       (host as? PlayerActivity)?.wasHardwarePlusRejectedForCurrentMedia() != true
 
   fun toggleHdrPlayback() {
@@ -2596,7 +2604,7 @@ class PlayerViewModel(
         decoderPreferences.boostSdrToHdr.set(enabled)
         // The saved renderer settings stay untouched; a playback restart only
         // installs/removes the temporary gpu-next + Vulkan override.
-        (host as? PlayerActivity)?.restartForRendererSettings()
+        (host as? PlayerActivity)?.refreshRendererFeatures()
         playerUpdate.value = PlayerUpdates.ShowText(if (enabled) "SDR 增强 HDR 已开启" else "SDR 增强 HDR 已关闭")
       }
       VideoDynamicRange.UNKNOWN -> playerUpdate.value = PlayerUpdates.ShowText("正在识别视频动态范围")
