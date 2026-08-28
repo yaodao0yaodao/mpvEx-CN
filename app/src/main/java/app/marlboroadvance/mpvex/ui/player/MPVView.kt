@@ -465,6 +465,10 @@ class MPVView(
   fun currentVideoDynamicRange(): VideoDynamicRange =
     currentVideoHdrType().dynamicRange
 
+  fun isLinearHdrPipelineActive(): Boolean =
+    MPVLib.getPropertyString("current-vo") == "gpu-next" &&
+      MPVLib.getPropertyString("gpu-api") == "vulkan"
+
   fun currentVideoHdrType(): VideoHdrType =
     classifyVideoHdrType(
       transfer = MPVLib.getPropertyString("video-params/gamma"),

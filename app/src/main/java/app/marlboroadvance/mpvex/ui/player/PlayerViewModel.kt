@@ -1436,6 +1436,30 @@ class PlayerViewModel(
   fun currentAiUpscaleStatus(): String =
     (host as? PlayerActivity)?.player?.currentAiUpscaleStatus() ?: "--"
 
+  fun currentHdrPlaybackStatus(): String {
+    val linear = (host as? PlayerActivity)?.player?.isLinearHdrPipelineActive() == true
+    return when (_videoHdrType.value) {
+      VideoHdrType.PQ -> when {
+        _hardwarePlusMode.value -> "HDR10 / PQ（直通）"
+        linear -> "HDR10 / PQ（线性 HDR）"
+        else -> "HDR10 / PQ（自动 HDR 输出）"
+      }
+      VideoHdrType.HLG -> when {
+        _hardwarePlusMode.value -> "HLG（直通）"
+        linear -> "HLG（线性 HDR）"
+        else -> "HLG（自动 HDR 输出）"
+      }
+      VideoHdrType.BT2020 -> when {
+        _hardwarePlusMode.value -> "BT.2020（直通）"
+        linear -> "BT.2020（线性 HDR）"
+        else -> "BT.2020（自动 HDR 输出）"
+      }
+      VideoHdrType.SDR ->
+        if (_sdrHdrBoostEnabled.value && !_hardwarePlusMode.value && linear) "SDR→HDR 增强" else "SDR"
+      VideoHdrType.UNKNOWN -> "识别中"
+    }
+  }
+
   private fun stopAutoCropDetection(removeCrop: Boolean) {
     autoCropJob?.cancel()
     autoCropJob = null
@@ -2487,7 +2511,11 @@ class PlayerViewModel(
       return
     }
     when (_videoDynamicRange.value) {
-      VideoDynamicRange.HDR -> playerUpdate.value = PlayerUpdates.ShowText("HDR 片源正在使用线性 HDR")
+      VideoDynamicRange.HDR -> {
+        val linear = (host as? PlayerActivity)?.player?.isLinearHdrPipelineActive() == true
+        playerUpdate.value =
+          PlayerUpdates.ShowText(if (linear) "HDR 片源正在使用线性 HDR" else "HDR 片源正在自动输出 HDR")
+      }
       VideoDynamicRange.SDR -> {
         val enabled = !_sdrHdrBoostEnabled.value
         _sdrHdrBoostEnabled.value = enabled
