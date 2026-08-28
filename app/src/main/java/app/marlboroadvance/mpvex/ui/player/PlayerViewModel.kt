@@ -1462,7 +1462,16 @@ class PlayerViewModel(
           val retainedHeight = cropHeight.toFloat() / sourceHeight
           val sourceLandscape = sourceWidth >= sourceHeight
           val cropLandscape = cropWidth >= cropHeight
-          if (retainedWidth < 0.65f || retainedHeight < 0.65f || sourceLandscape != cropLandscape) {
+          val cropsBothAxes = retainedWidth < 0.98f && retainedHeight < 0.98f
+          val horizontalBarsAreAsymmetric =
+            kotlin.math.abs(leftCrop - rightCrop) > (sourceWidth * 0.02f).roundToInt()
+          if (
+            retainedWidth < 0.65f ||
+            retainedHeight < 0.65f ||
+            sourceLandscape != cropLandscape ||
+            cropsBothAxes ||
+            horizontalBarsAreAsymmetric
+          ) {
             stableCandidate = null
             stableSamples = 0
             return@repeat
