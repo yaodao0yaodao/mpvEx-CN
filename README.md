@@ -4,6 +4,14 @@
 [![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/yaodao0yaodao/mpvEx-CN.svg?logo=github&label=GitHub&cacheSeconds=3600)](https://github.com/yaodao0yaodao/mpvEx-CN/releases/latest)
 [![GitHub all releases](https://img.shields.io/github/downloads/yaodao0yaodao/mpvEx-CN/total?logo=github&cacheSeconds=3600)](https://github.com/yaodao0yaodao/mpvEx-CN/releases/latest)
 
+> [!IMPORTANT]
+> **新版开发预告**
+>
+> 项目正在进行大规模重构，预计于 **2026 年 9 月中旬**更新新版。新版计划引入 Android 原生 [ExoPlayer](https://exoplayer.dev/) 播放内核，解决 MPV 内核只能通过 Linear HDR 实现屏幕真实 HDR 输出链路的问题。
+>
+> - **MPV 内核：** 专门用于 SDR→HDR 增强、AI 超分辨率和特效字幕等高级播放功能。
+> - **ExoPlayer 内核：** 负责 Android 原生 HDR 输出链路，重点提供更高性能和更低功耗；缺点是无法使用特效字幕。
+
 这是面向中文用户独立维护的 Android mpv/libmpv 开源视频播放器，源自 [marlboro-advance/mpvEx](https://github.com/marlboro-advance/mpvEx)，播放器内的软件名称仍为 **mpvEx**。项目提供完整简体中文界面、AI 超分辨率、SDR→HDR 增强、自动播放保护、字幕轨标题智能匹配等实用改进。
 
 ArtCNN、HDR、ThumbFast 定位预览、字幕双指缩放、统计/控制台及部分播放逻辑参考并适配自 [Riteshp2001/mpvRx](https://github.com/Riteshp2001/mpvRx)。两个项目结构不同，本项目按自身定位重新组合，并未移植 mpvRx 的 UI 自定义体系。
